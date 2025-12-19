@@ -502,8 +502,8 @@ unsafe fn paint(hwnd: HWND) {
 
   let (title, body) = if cfg {
     ("Toast Position".to_string(), "Zieh mich an die gewünschte Stelle.".to_string())
-  } else if let Some(t) = toast {
-    (t.title, t.body)
+  } else if let Some(t) = toast.as_ref() {
+    (t.title.clone(), t.body.clone())
   } else {
     ("helltime".to_string(), "—".to_string())
   };
