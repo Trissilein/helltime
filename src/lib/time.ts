@@ -1,7 +1,6 @@
 export function formatLocalTime(iso: string): string {
   const date = new Date(iso);
   return new Intl.DateTimeFormat(undefined, {
-    weekday: "short",
     hour: "2-digit",
     minute: "2-digit"
   }).format(date);
@@ -17,4 +16,3 @@ export function formatCountdown(msRemaining: number): string {
   const ss = seconds.toString().padStart(2, "0");
   return hours > 0 ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
 }
-

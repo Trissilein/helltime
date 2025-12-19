@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { fetchSchedule } from "./lib/helltides";
-import { notify } from "./lib/notify";
 import { formatCountdown, formatLocalTime } from "./lib/time";
 import { loadSettings, saveSettings, type BeepPattern, type Settings, type TimerSettings } from "./lib/settings";
 import { playBeep } from "./lib/sound";
 import { formatRemainingSpeech, speak } from "./lib/speech";
 import type { ScheduleResponse, ScheduleType, WorldBossScheduleItem } from "./lib/types";
-import { overlayEnterConfig, overlayExitConfig, overlayGetPosition, overlayShow, overlayStatus } from "./lib/overlay";
+import { overlayEnterConfig, overlayExitConfig, overlayGetPosition, overlayShow } from "./lib/overlay";
 
 type FiredMap = Record<string, number>;
 
@@ -58,10 +57,6 @@ function spokenTypeLabel(type: ScheduleType): string {
   }
 }
 
-function makeDebugSpeech(type: ScheduleType, timerIndex: number, minutesBefore: number): string {
-  return `${spokenTypeLabel(type)}. Debug Timer ${timerIndex + 1}. ${minutesBefore} Minuten vorher.`;
-}
-
 function findNext<T extends { startTime: string }>(items: T[], now: number): T | null {
   let best: T | null = null;
   let bestStartMs = Number.POSITIVE_INFINITY;
@@ -107,8 +102,9 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [lastRefreshAt, setLastRefreshAt] = useState<number | null>(null);
-  const [overlayInfo, setOverlayInfo] = useState<Awaited<ReturnType<typeof overlayStatus>>>(null);
   const [overlaySavedAt, setOverlaySavedAt] = useState<number | null>(null);
+  const [nextAutoRefreshAt, setNextAutoRefreshAt] = useState<number | null>(null);
+  const autoRefreshTimeoutRef = useRef<number | null>(null);
 
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const firedRef = useRef<FiredMap>(loadFired());
@@ -144,9 +140,47 @@ export default function App() {
     }
   }
 
+  function randomAutoRefreshMs(): number {
+    const minMs = 10 * 60_000;
+    const maxMs = 15 * 60_000;
+    return Math.floor(minMs + Math.random() * (maxMs - minMs + 1));
+  }
+
+  function scheduleNextAutoRefresh(baseNow: number): void {
+    const nextAt = baseNow + randomAutoRefreshMs();
+    setNextAutoRefreshAt(nextAt);
+    if (autoRefreshTimeoutRef.current) window.clearTimeout(autoRefreshTimeoutRef.current);
+    autoRefreshTimeoutRef.current = window.setTimeout(() => {
+      void refresh();
+    }, Math.max(1000, nextAt - Date.now()));
+  }
+
   useEffect(() => {
     void refresh();
   }, []);
+
+  useEffect(() => {
+    if (!settings.autoRefreshEnabled) {
+      if (autoRefreshTimeoutRef.current) window.clearTimeout(autoRefreshTimeoutRef.current);
+      autoRefreshTimeoutRef.current = null;
+      setNextAutoRefreshAt(null);
+      return;
+    }
+
+    scheduleNextAutoRefresh(Date.now());
+    return () => {
+      if (autoRefreshTimeoutRef.current) window.clearTimeout(autoRefreshTimeoutRef.current);
+      autoRefreshTimeoutRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.autoRefreshEnabled]);
+
+  useEffect(() => {
+    if (!settings.autoRefreshEnabled) return;
+    if (!lastRefreshAt) return;
+    scheduleNextAutoRefresh(lastRefreshAt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastRefreshAt]);
 
   const nextByType = useMemo(() => {
     if (!schedule) return null;
@@ -221,7 +255,8 @@ export default function App() {
 
         const body = `Start in ${formatCountdown(Math.max(0, remainingMs))} • ${timeLabel}`;
         void showOverlayToast({ title, body, type, kind: "event" });
-        if (settings.systemToastsEnabled) void notify(title, body);
+
+        if (!settings.soundEnabled) continue;
 
         const beepMs = playBeep(timer.beepPattern, timer.pitchHz, settings.volume);
 
@@ -285,10 +320,6 @@ export default function App() {
     return parseInt(m[1], 16);
   }
 
-  async function testSystemToast(): Promise<void> {
-    await notify("helltime – Test", `System-Toast Test • ${formatClock(Date.now())}`);
-  }
-
   async function showOverlayToast(payload: { title: string; body: string; type?: ScheduleType; kind?: "event" | "debug" }) {
     if (!settings.overlayToastsEnabled) return;
     const bg = hexToRgbInt(settings.overlayBgHex);
@@ -311,39 +342,9 @@ export default function App() {
   }
 
   function testVolumeBeep(volumeOverride?: number): void {
+    if (!settings.soundEnabled) return;
     const sampleTimer = settings.categories.helltide.timers[0];
     playBeep(sampleTimer.beepPattern, sampleTimer.pitchHz, typeof volumeOverride === "number" ? volumeOverride : settings.volume);
-  }
-
-  async function fireAllDebug(): Promise<void> {
-    const delay = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
-    const ttsPauseMs = 500;
-
-    for (const type of types) {
-      const category = settings.categories[type];
-      if (!category.enabled) continue;
-
-      const title = typeLabel(type);
-      for (let i = 0; i < category.timerCount; i++) {
-        const timer = category.timers[i];
-        const label = `Debug Timer ${i + 1} (${timer.minutesBefore} min)`;
-
-        await showOverlayToast({ title, body: label, type, kind: "debug" });
-        if (settings.systemToastsEnabled) {
-          await notify(title, label);
-          await delay(300);
-        }
-
-        const beepMs = playBeep(timer.beepPattern, timer.pitchHz, settings.volume);
-        if (timer.ttsEnabled) {
-          window.setTimeout(() => {
-            void speak(makeDebugSpeech(type, i, timer.minutesBefore), settings.volume);
-          }, beepMs + ttsPauseMs);
-        }
-
-        await delay(Math.max(650, beepMs + 200));
-      }
-    }
   }
 
   return (
@@ -362,11 +363,25 @@ export default function App() {
               <button className="btn" onClick={() => void refresh()} disabled={loading}>
                 {loading ? "Lade…" : "Refresh"}
               </button>
+              <label className="switch">
+                <input
+                  type="checkbox"
+                  checked={settings.autoRefreshEnabled}
+                  onChange={(e) => setSettings((s) => ({ ...s, autoRefreshEnabled: e.target.checked }))}
+                />
+                <span className="switchTrack">
+                  <span className="switchThumb" />
+                </span>
+                <span className="switchLabel">Auto</span>
+              </label>
               <a className="btn primary" href="https://helltides.com" target="_blank" rel="noreferrer">
                 Quelle
               </a>
             </div>
-            <div className="subNote">Letztes Update: {lastRefreshAt ? formatClock(lastRefreshAt) : "—"}</div>
+            <div className="subNote">
+              Letztes Update: {lastRefreshAt ? formatClock(lastRefreshAt) : "—"}
+              {settings.autoRefreshEnabled && nextAutoRefreshAt ? ` • Auto in ${formatCountdown(nextAutoRefreshAt - now)}` : ""}
+            </div>
           </div>
         </div>
       </div>
@@ -381,36 +396,11 @@ export default function App() {
                 {nextEnabledOverall ? `${nextEnabledOverall.name} • ${formatLocalTime(nextEnabledOverall.startTime)}` : "—"}
               </div>
             </div>
-            {settings.systemToastsEnabled ? (
-              <div className="hint">
-                Hinweis: Position/Anzeige hängt vom Betriebssystem ab (Windows: Fokusassist & Benachrichtigungseinstellungen prüfen).
-              </div>
-            ) : null}
-            <div className="field">
-              <label>
-                Lautstärke: <span className="pill">{Math.round(settings.volume * 100)}%</span>
-              </label>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={1}
-                value={Math.round(settings.volume * 100)}
-                onChange={(e) => setSettings((s) => ({ ...s, volume: clampInt(Number(e.target.value), 0, 100) / 100 }))}
-                onPointerUp={(e) => testVolumeBeep(clampInt(Number(e.currentTarget.value), 0, 100) / 100)}
-                onKeyUp={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    const target = e.currentTarget as HTMLInputElement;
-                    testVolumeBeep(clampInt(Number(target.value), 0, 100) / 100);
-                  }
-                }}
-              />
-            </div>
-            <div className="section">
-              <div className="sectionHeader">
+            <details className="section" open>
+              <summary className="sectionHeader">
                 <div className="sectionTitle">Benachrichtigungen</div>
-                <div className="pill small">Overlay + System</div>
-              </div>
+                <div className="pill small">Overlay + Ton</div>
+              </summary>
               <div className="sectionBody">
                 <div className="inline">
                   <div className="hint">Overlay Toast (Topmost)</div>
@@ -428,17 +418,17 @@ export default function App() {
                 </div>
 
                 <div className="inline">
-                  <div className="hint">System Toast (Windows)</div>
+                  <div className="hint">Ton</div>
                   <label className="switch">
                     <input
                       type="checkbox"
-                      checked={settings.systemToastsEnabled}
-                      onChange={(e) => setSettings((s) => ({ ...s, systemToastsEnabled: e.target.checked }))}
+                      checked={settings.soundEnabled}
+                      onChange={(e) => setSettings((s) => ({ ...s, soundEnabled: e.target.checked }))}
                     />
                     <span className="switchTrack">
                       <span className="switchThumb" />
                     </span>
-                    <span className="switchLabel">{settings.systemToastsEnabled ? "an" : "aus"}</span>
+                    <span className="switchLabel">{settings.soundEnabled ? "an" : "aus"}</span>
                   </label>
                 </div>
 
@@ -455,46 +445,43 @@ export default function App() {
                     <button className="btn" type="button" onClick={() => void startOverlayPositionMode()}>
                       Position
                     </button>
-                    <button className="btn" type="button" onClick={() => void saveOverlayPosition()}>
-                      Speichern
-                    </button>
-                    <button
-                      className="btn"
-                      type="button"
-                      onClick={() => void showOverlayToast({ title: "helltime", body: "Overlay Toast Test", kind: "debug" })}
-                    >
-                      Test
-                    </button>
-                  </div>
+                <button className="btn" type="button" onClick={() => void saveOverlayPosition()}>
+                  Speichern
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => void showOverlayToast({ title: "helltime", body: "Overlay Toast Test", kind: "debug" })}
+                >
+                  Test
+                </button>
+              </div>
+            </div>
+
+                {overlaySavedAt ? <div className="hint">Gespeichert: {formatClock(overlaySavedAt)}</div> : null}
+                <div className="field">
+                  <label>
+                    Lautstärke: <span className="pill">{Math.round(settings.volume * 100)}%</span>
+                  </label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    disabled={!settings.soundEnabled}
+                    value={Math.round(settings.volume * 100)}
+                    onChange={(e) => setSettings((s) => ({ ...s, volume: clampInt(Number(e.target.value), 0, 100) / 100 }))}
+                    onPointerUp={(e) => testVolumeBeep(clampInt(Number(e.currentTarget.value), 0, 100) / 100)}
+                    onKeyUp={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        const target = e.currentTarget as HTMLInputElement;
+                        testVolumeBeep(clampInt(Number(target.value), 0, 100) / 100);
+                      }
+                    }}
+                  />
                 </div>
-
-                {overlaySavedAt ? <div className="hint">Gespeichert: {formatClock(overlaySavedAt)}</div> : null}
               </div>
-            </div>
-
-            <div className="inline">
-              <div className="hint">Debug</div>
-              <div className="actions">
-                <button className="btn" type="button" onClick={() => void testSystemToast()}>
-                  Test System-Toast
-                </button>
-                <button className="btn" type="button" onClick={() => testVolumeBeep()}>
-                  Test Ton
-                </button>
-                <button className="btn" type="button" onClick={() => void fireAllDebug()}>
-                  Alles feuern
-                </button>
-                <button className="btn" type="button" onClick={() => void overlayStatus().then((s) => setOverlayInfo(s))}>
-                  Overlay Status
-                </button>
-              </div>
-            </div>
-            {overlayInfo ? (
-              <div className="hint">
-                Overlay: {overlayInfo.supported ? "supported" : "n/a"} • running: {String(overlayInfo.running)} • visible:{" "}
-                {String(overlayInfo.visible)} • config: {String(overlayInfo.config_mode)} • err: {overlayInfo.last_error ?? "—"}
-              </div>
-            ) : null}
+            </details>
             <div className="hint">Kategorien aktivieren und Timer pro Kategorie konfigurieren.</div>
             {error ? <div className="error">Fehler: {error}</div> : null}
           </div>
@@ -555,6 +542,7 @@ export default function App() {
                               className="btn"
                               type="button"
                               onClick={() => {
+                                if (!settings.soundEnabled) return;
                                 const beepMs = playBeep(timer.beepPattern, timer.pitchHz, settings.volume);
                                 if (timer.ttsEnabled) {
                                   window.setTimeout(() => {
@@ -614,7 +602,11 @@ export default function App() {
                                   type="button"
                                   aria-label="Ton testen"
                                   title="Ton testen"
-                                  onClick={() => playBeep(timer.beepPattern, timer.pitchHz, settings.volume)}
+                                  disabled={!settings.soundEnabled}
+                                  onClick={() => {
+                                    if (!settings.soundEnabled) return;
+                                    playBeep(timer.beepPattern, timer.pitchHz, settings.volume);
+                                  }}
                                 >
                                   <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
                                     <path

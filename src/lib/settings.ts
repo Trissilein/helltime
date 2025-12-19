@@ -17,16 +17,18 @@ export type CategorySettings = {
 };
 
 export type Settings = {
-  version: 5;
+  version: 6;
   volume: number; // 0-1
   systemToastsEnabled: boolean;
+  soundEnabled: boolean;
+  autoRefreshEnabled: boolean;
   overlayToastsEnabled: boolean;
   overlayToastsPosition: { x: number; y: number } | null;
   overlayBgHex: string; // "#rrggbb"
   categories: Record<ScheduleType, CategorySettings>;
 };
 
-const STORAGE_KEY = "settings_v5";
+const STORAGE_KEY = "settings_v6";
 
 function defaultTimers(): [TimerSettings, TimerSettings, TimerSettings] {
   return [
@@ -45,9 +47,11 @@ function defaultCategory(enabled = true): CategorySettings {
 }
 
 const defaults: Settings = {
-  version: 5,
+  version: 6,
   volume: 0.8,
   systemToastsEnabled: false,
+  soundEnabled: true,
+  autoRefreshEnabled: false,
   overlayToastsEnabled: false,
   overlayToastsPosition: null,
   overlayBgHex: "#0b1220",
@@ -138,12 +142,12 @@ function cloneTimers(timers: [TimerSettings, TimerSettings, TimerSettings]): [Ti
 
 export function loadSettings(): Settings {
   const v4 = readJson<unknown>(STORAGE_KEY, null);
-  if (v4 && typeof v4 === "object" && (v4 as any).version === 5) {
+  if (v4 && typeof v4 === "object" && (v4 as any).version === 6) {
     const raw = v4 as any;
     const rawCategories = raw.categories ?? {};
 
     return {
-      version: 5,
+      version: 6,
       volume: clampUnit(raw.volume, defaults.volume),
       systemToastsEnabled:
         typeof raw.systemToastsEnabled === "boolean"
@@ -151,6 +155,8 @@ export function loadSettings(): Settings {
           : typeof raw.toastEnabled === "boolean"
             ? raw.toastEnabled
             : defaults.systemToastsEnabled,
+      soundEnabled: typeof raw.soundEnabled === "boolean" ? raw.soundEnabled : defaults.soundEnabled,
+      autoRefreshEnabled: typeof raw.autoRefreshEnabled === "boolean" ? raw.autoRefreshEnabled : defaults.autoRefreshEnabled,
       overlayToastsEnabled: typeof raw.overlayToastsEnabled === "boolean" ? raw.overlayToastsEnabled : defaults.overlayToastsEnabled,
       overlayToastsPosition: normalizePosition(raw.overlayToastsPosition),
       overlayBgHex: normalizeHexColor(raw.overlayBgHex, defaults.overlayBgHex),
@@ -165,10 +171,12 @@ export function loadSettings(): Settings {
   const v4raw = readJson<any>("settings_v4", null);
   if (v4raw && typeof v4raw === "object" && v4raw.version === 4) {
     return {
-      version: 5,
+      version: 6,
       volume: clampUnit(v4raw.volume, defaults.volume),
       systemToastsEnabled:
         typeof v4raw.systemToastsEnabled === "boolean" ? v4raw.systemToastsEnabled : defaults.systemToastsEnabled,
+      soundEnabled: defaults.soundEnabled,
+      autoRefreshEnabled: defaults.autoRefreshEnabled,
       overlayToastsEnabled: typeof v4raw.overlayToastsEnabled === "boolean" ? v4raw.overlayToastsEnabled : defaults.overlayToastsEnabled,
       overlayToastsPosition: normalizePosition(v4raw.overlayToastsPosition),
       overlayBgHex: defaults.overlayBgHex,
@@ -183,9 +191,11 @@ export function loadSettings(): Settings {
   const v3 = readJson<any>("settings_v3", null);
   if (v3 && typeof v3 === "object" && v3.version === 3) {
     return {
-      version: 5,
+      version: 6,
       volume: clampUnit(v3.volume, defaults.volume),
       systemToastsEnabled: typeof v3.systemToastsEnabled === "boolean" ? v3.systemToastsEnabled : defaults.systemToastsEnabled,
+      soundEnabled: defaults.soundEnabled,
+      autoRefreshEnabled: defaults.autoRefreshEnabled,
       overlayToastsEnabled: defaults.overlayToastsEnabled,
       overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,
@@ -204,9 +214,11 @@ export function loadSettings(): Settings {
     const timers = timersFromV2(v2.levels);
 
     return {
-      version: 5,
+      version: 6,
       volume: defaults.volume,
       systemToastsEnabled: defaults.systemToastsEnabled,
+      soundEnabled: defaults.soundEnabled,
+      autoRefreshEnabled: defaults.autoRefreshEnabled,
       overlayToastsEnabled: defaults.overlayToastsEnabled,
       overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,
@@ -230,9 +242,11 @@ export function loadSettings(): Settings {
     timers[0] = { ...timers[0], minutesBefore };
 
     return {
-      version: 5,
+      version: 6,
       volume: defaults.volume,
       systemToastsEnabled: defaults.systemToastsEnabled,
+      soundEnabled: defaults.soundEnabled,
+      autoRefreshEnabled: defaults.autoRefreshEnabled,
       overlayToastsEnabled: defaults.overlayToastsEnabled,
       overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,

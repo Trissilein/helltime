@@ -458,6 +458,12 @@ input {
   justify-content: space-between;
   gap: 12px;
   background: rgba(255, 255, 255, 0.04);
+  list-style: none;
+  cursor: pointer;
+}
+
+summary.sectionHeader::-webkit-details-marker {
+  display: none;
 }
 
 .sectionTitle {
