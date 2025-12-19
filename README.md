@@ -46,3 +46,4 @@ npm run tauri build
 ## Nächste Schritte (Android)
 
 Tauri Mobile ist (je nach Tauri-Version) als nächster Schritt möglich; sobald du soweit bist, sag kurz Bescheid, dann verdrahten wir das Projekt für Android (Gradle, Permissions, Notification-Verhalten, etc.).
+# helltime
