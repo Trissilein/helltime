@@ -12,17 +12,23 @@ Datenquelle: `https://helltides.com/api/schedule` (wird über das Tauri-Backend 
 ## Verhalten
 
 - Fenster ist als kleines Widget gedacht.
-- Benachrichtigungen optional als **System-Notifications** (Windows Toasts; Position bestimmt das OS).
+- Benachrichtigungen laufen über ein eigenes **Overlay-Fenster** (always-on-top), entweder als permanente Übersicht oder als Toast-Mode.
 
 ## UI (aktuell)
 
-1. **Intro & Settings** (Status, Refresh, System-Toasts/Lautstärke)
+1. **Intro & Settings** (Status, Refresh, Overlay/Lautstärke)
 2. **Reminder**: 3 Kategorien (Helltide / Legion / World Boss)
    - Toggle **Erinnern** schaltet pro Kategorie (keine Einzel-Events)
    - Pro Kategorie: **Timer Anzahl** (1–3)
    - Pro Timer: Minuten vorher (1–60), TTS, Beep-Pattern (beep/double/triple), Tonhöhe (Hz)
    - Test-Button pro Timer (Beep + optional TTS)
    - Kategorien sortieren sich automatisch nach dem nächsten Start (frühestes oben); deaktivierte Kategorien klappen ein
+
+3. **Overlay** (Benachrichtigungen)
+   - Overlay **an/aus**
+   - Mode **Overview** oder **Toast**
+   - Kategorienauswahl für die Overview-Liste
+   - Hintergrundfarbe, Transparenz, Skalierung
 
 ## Voraussetzungen
 
