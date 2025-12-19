@@ -548,12 +548,13 @@ export default function App() {
                   </div>
                   <div className="categoryRight">
                     <div className="pill">{timeLabel}</div>
-                    <label className="switch" onClick={(e) => e.stopPropagation()}>
+                    <label className="switch" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={category.enabled}
                         onChange={(e) => setCategoryEnabled(type, e.target.checked)}
                         onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
                       />
                       <span className="switchTrack">
                         <span className="switchThumb" />
