@@ -1,6 +1,5 @@
 use super::{OverlayPayload, OverlayPosition, OverlayStatus, Shared};
 use std::ffi::c_void;
-use std::ptr::null_mut;
 use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -9,8 +8,9 @@ use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
   BeginPaint, CreateFontW, CreateSolidBrush, DeleteObject, DrawTextW, EndPaint, FillRect, GetDeviceCaps, InvalidateRect,
-  SelectObject, SetBkMode, SetTextColor, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_TOP, HDC, HGDIOBJ, HFONT, PAINTSTRUCT,
-  TRANSPARENT,
+  SelectObject, SetBkMode, SetTextColor, CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, DEFAULT_PITCH, DEFAULT_QUALITY,
+  DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_TOP, FF_DONTCARE, FONT_PITCH_AND_FAMILY, OUT_DEFAULT_PRECIS, HDC, HGDIOBJ,
+  HFONT, PAINTSTRUCT, TRANSPARENT,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
@@ -18,7 +18,7 @@ use windows::Win32::UI::HiDpi::{SetProcessDpiAwarenessContext, DPI_AWARENESS_CON
 use windows::Win32::UI::WindowsAndMessaging::{
   CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, GetWindowLongPtrW, GetWindowRect, KillTimer, LoadCursorW,
   PostMessageW, PostQuitMessage, RegisterClassW, SendMessageW, SetLayeredWindowAttributes, SetTimer, SetWindowLongPtrW,
-  SetWindowPos, ShowWindow, TranslateMessage, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, GWL_EXSTYLE, GWLP_USERDATA, HMENU,
+  SetWindowPos, ShowWindow, TranslateMessage, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, GWL_EXSTYLE, GWLP_USERDATA,
   HTCAPTION, IDC_ARROW, LWA_ALPHA, MSG, SW_HIDE, SW_SHOWNOACTIVATE, WM_APP, WM_CLOSE, WM_DESTROY, WM_ERASEBKGND,
   WM_LBUTTONDOWN, WM_MOVE, WM_NCCREATE, WM_PAINT, WM_TIMER, WNDCLASSW, WS_CLIPSIBLINGS, WS_EX_LAYERED, WS_EX_NOACTIVATE,
   WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
@@ -336,7 +336,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex as isize);
         apply_position(hwnd, &ctx.shared);
         ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-        let _ = SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+        let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
         InvalidateRect(Some(hwnd), None, false.into());
         if let Ok(mut v) = ctx.shared.visible.lock() {
           *v = true;
@@ -390,7 +390,7 @@ unsafe fn get_ctx(hwnd: HWND) -> Option<&'static mut WindowCtx> {
 unsafe fn set_visible(hwnd: HWND, visible: bool, ctx: Option<&'static mut WindowCtx>) {
   if visible {
     ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-    let _ = SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
+    let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
   } else {
     ShowWindow(hwnd, SW_HIDE);
     let _ = KillTimer(Some(hwnd), TIMER_HIDE);
@@ -406,7 +406,7 @@ unsafe fn set_visible(hwnd: HWND, visible: bool, ctx: Option<&'static mut Window
 unsafe fn apply_position(hwnd: HWND, shared: &Shared) {
   let pos = shared.position.lock().ok().and_then(|p| p.clone());
   if let Some(p) = pos {
-    let _ = SetWindowPos(hwnd, HWND_TOPMOST, p.x, p.y, 280, 110, SWP_NOACTIVATE);
+    let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), p.x, p.y, 280, 110, SWP_NOACTIVATE);
   }
 }
 
@@ -435,11 +435,11 @@ unsafe fn paint(hwnd: HWND) {
       0,
       0,
       0,
-      windows::Win32::Graphics::Gdi::DEFAULT_CHARSET,
-      windows::Win32::Graphics::Gdi::OUT_DEFAULT_PRECIS,
-      windows::Win32::Graphics::Gdi::CLIP_DEFAULT_PRECIS,
-      windows::Win32::Graphics::Gdi::DEFAULT_QUALITY,
-      windows::Win32::Graphics::Gdi::DEFAULT_PITCH | windows::Win32::Graphics::Gdi::FF_DONTCARE,
+      DEFAULT_CHARSET,
+      OUT_DEFAULT_PRECIS,
+      CLIP_DEFAULT_PRECIS,
+      DEFAULT_QUALITY,
+      FONT_PITCH_AND_FAMILY(DEFAULT_PITCH.0 | FF_DONTCARE.0),
       w!("Segoe UI"),
     ));
     ctx.font_body = Some(CreateFontW(
@@ -451,11 +451,11 @@ unsafe fn paint(hwnd: HWND) {
       0,
       0,
       0,
-      windows::Win32::Graphics::Gdi::DEFAULT_CHARSET,
-      windows::Win32::Graphics::Gdi::OUT_DEFAULT_PRECIS,
-      windows::Win32::Graphics::Gdi::CLIP_DEFAULT_PRECIS,
-      windows::Win32::Graphics::Gdi::DEFAULT_QUALITY,
-      windows::Win32::Graphics::Gdi::DEFAULT_PITCH | windows::Win32::Graphics::Gdi::FF_DONTCARE,
+      DEFAULT_CHARSET,
+      OUT_DEFAULT_PRECIS,
+      CLIP_DEFAULT_PRECIS,
+      DEFAULT_QUALITY,
+      FONT_PITCH_AND_FAMILY(DEFAULT_PITCH.0 | FF_DONTCARE.0),
       w!("Segoe UI"),
     ));
   }
