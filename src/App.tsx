@@ -147,6 +147,11 @@ export default function App() {
   }, [settings]);
 
   useEffect(() => {
+    void broadcastOverlayWindowSettings(settings);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     if (panicStopEnabled) {
       void setOverlayWindowVisible(false);
       return;
@@ -157,7 +162,7 @@ export default function App() {
     }
 
     void ensureOverlayWindow();
-    void setOverlayWindowVisible(settings.overlayWindowMode === "overview");
+    void setOverlayWindowVisible(true);
   }, [settings.overlayWindowEnabled, settings.overlayWindowMode, panicStopEnabled]);
 
   useEffect(() => {

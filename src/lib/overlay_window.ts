@@ -13,7 +13,7 @@ export async function ensureOverlayWindow(): Promise<void> {
 
     const win = new WebviewWindow(OVERLAY_WINDOW_LABEL, {
       title: "helltime overlay",
-      url: "index.html?view=overlay",
+      url: "/?view=overlay",
       center: true,
       x: 40,
       y: 40,
@@ -93,8 +93,13 @@ export function toOverlayWindowSettings(settings: Settings): OverlayWindowSettin
 export async function broadcastOverlayWindowSettings(settings: Settings): Promise<void> {
   if (!isTauri()) return;
   try {
-    const { emitTo } = await import("@tauri-apps/api/event");
-    await emitTo(OVERLAY_WINDOW_LABEL, "helltime:overlay-settings", toOverlayWindowSettings(settings));
+    const { emit, emitTo } = await import("@tauri-apps/api/event");
+    const payload = toOverlayWindowSettings(settings);
+    try {
+      await emitTo(OVERLAY_WINDOW_LABEL, "helltime:overlay-settings", payload);
+    } catch {
+      await emit("helltime:overlay-settings", payload);
+    }
   } catch (e) {
     // eslint-disable-next-line no-console
     console.warn("broadcastOverlayWindowSettings failed", e);

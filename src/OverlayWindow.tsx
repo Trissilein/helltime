@@ -217,17 +217,8 @@ export default function OverlayWindow() {
       try {
         const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
         const win = getCurrentWebviewWindow();
-        if (settings.overlayWindowMode === "toast") {
-          if (toastVisible) {
-            await win.show();
-            await win.setAlwaysOnTop(true);
-          } else {
-            await win.hide();
-          }
-        } else {
-          await win.show();
-          await win.setAlwaysOnTop(true);
-        }
+        await win.show();
+        await win.setAlwaysOnTop(true);
       } catch {
         // ignore
       }
