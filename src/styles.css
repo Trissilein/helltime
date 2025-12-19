@@ -197,6 +197,18 @@ input {
   overflow: hidden;
 }
 
+.categoryDetails {
+  padding: 0;
+}
+
+.categoryDetails > summary {
+  padding: 12px;
+}
+
+.categoryDetails > .form {
+  padding: 0 12px 12px;
+}
+
 .categoryCard::before {
   content: "";
   position: absolute;
@@ -451,6 +463,10 @@ input {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.section[open] .sectionHeader {
+  background: rgba(255, 255, 255, 0.05);
+}
+
 .sectionHeader {
   padding: 10px 12px;
   display: flex;
@@ -464,6 +480,54 @@ input {
 
 summary.sectionHeader::-webkit-details-marker {
   display: none;
+}
+
+.sectionHeader::after {
+  content: "▸";
+  color: rgba(255, 255, 255, 0.7);
+  margin-left: 10px;
+  transform: rotate(0deg);
+  transition: transform 140ms ease;
+}
+
+details[open] > summary.sectionHeader::after {
+  transform: rotate(90deg);
+}
+
+.categorySummary {
+  list-style: none;
+  cursor: pointer;
+  display: block;
+  padding: 0;
+  position: relative;
+}
+
+summary.categorySummary::-webkit-details-marker {
+  display: none;
+}
+
+.categorySummary::after {
+  content: "▸";
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  transform: rotate(0deg);
+  transition: transform 140ms ease;
+  pointer-events: none;
+}
+
+details[open].categoryDetails > summary.categorySummary::after {
+  transform: rotate(90deg);
+}
+
+.categoryDetails > summary.categorySummary .row {
+  padding-right: 18px;
+}
+
+.iconBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .sectionTitle {

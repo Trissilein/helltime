@@ -6,6 +6,7 @@ import { playBeep } from "./lib/sound";
 import { formatRemainingSpeech, speak } from "./lib/speech";
 import type { ScheduleResponse, ScheduleType, WorldBossScheduleItem } from "./lib/types";
 import { overlayEnterConfig, overlayExitConfig, overlayGetPosition, overlayShow } from "./lib/overlay";
+import { openExternalUrl } from "./lib/external";
 
 type FiredMap = Record<string, number>;
 
@@ -105,6 +106,12 @@ export default function App() {
   const [overlaySavedAt, setOverlaySavedAt] = useState<number | null>(null);
   const [nextAutoRefreshAt, setNextAutoRefreshAt] = useState<number | null>(null);
   const autoRefreshTimeoutRef = useRef<number | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState<Record<ScheduleType, boolean>>(() => ({
+    helltide: false,
+    legion: false,
+    world_boss: false
+  }));
 
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const firedRef = useRef<FiredMap>(loadFired());
@@ -270,6 +277,7 @@ export default function App() {
   }, [schedule, now, settings]);
 
   function setCategoryEnabled(type: ScheduleType, enabled: boolean) {
+    if (!enabled) setCategoryOpen((s) => ({ ...s, [type]: false }));
     setSettings((s) => ({
       ...s,
       categories: {
@@ -374,9 +382,9 @@ export default function App() {
                 </span>
                 <span className="switchLabel">Auto</span>
               </label>
-              <a className="btn primary" href="https://helltides.com" target="_blank" rel="noreferrer">
+              <button className="btn primary" type="button" onClick={() => void openExternalUrl("https://helltides.com")}>
                 Quelle
-              </a>
+              </button>
             </div>
             <div className="subNote">
               Letztes Update: {lastRefreshAt ? formatClock(lastRefreshAt) : "—"}
@@ -396,7 +404,7 @@ export default function App() {
                 {nextEnabledOverall ? `${nextEnabledOverall.name} • ${formatLocalTime(nextEnabledOverall.startTime)}` : "—"}
               </div>
             </div>
-            <details className="section" open>
+            <details className="section" open={notificationsOpen} onToggle={(e) => setNotificationsOpen((e.currentTarget as HTMLDetailsElement).open)}>
               <summary className="sectionHeader">
                 <div className="sectionTitle">Benachrichtigungen</div>
                 <div className="pill small">Overlay + Ton</div>
@@ -497,9 +505,13 @@ export default function App() {
           const spokenName = getSpokenEventName(type, next);
 
           return (
-            <div className={`card span12 categoryCard ${type}`} key={type}>
-              <h2>{typeLabel(type)}</h2>
-              <div className="form">
+            <details
+              className={`card span12 categoryCard ${type} categoryDetails`}
+              key={type}
+              open={category.enabled && categoryOpen[type]}
+              onToggle={(e) => setCategoryOpen((s) => ({ ...s, [type]: (e.currentTarget as HTMLDetailsElement).open }))}
+            >
+              <summary className="categorySummary">
                 <div className="row">
                   <div className="kpi">
                     <div className="label">{name}</div>
@@ -509,12 +521,23 @@ export default function App() {
                   </div>
                   <div className="categoryRight">
                     <div className="pill">{timeLabel}</div>
-                    <label className="toggle">
-                      <input type="checkbox" checked={category.enabled} onChange={(e) => setCategoryEnabled(type, e.target.checked)} />
-                      <span className="toggleLabel">Erinnern</span>
+                    <label className="switch" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={category.enabled}
+                        onChange={(e) => setCategoryEnabled(type, e.target.checked)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <span className="switchTrack">
+                        <span className="switchThumb" />
+                      </span>
+                      <span className="switchLabel">Erinnern</span>
                     </label>
                   </div>
                 </div>
+              </summary>
+
+              <div className="form">
 
                 {category.enabled ? (
                   <>
@@ -632,7 +655,7 @@ export default function App() {
                   </>
                 ) : null}
               </div>
-            </div>
+            </details>
           );
         })}
       </div>
