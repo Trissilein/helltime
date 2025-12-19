@@ -489,6 +489,11 @@ unsafe fn paint(hwnd: HWND) {
 
   let toast = ctx.shared.toast.lock().ok().and_then(|t| t.clone());
   let bg_rgb = toast.as_ref().and_then(|t| t.bg_rgb).unwrap_or(0x0b1220);
+  let bg_a = toast
+    .as_ref()
+    .and_then(|t| t.bg_a)
+    .unwrap_or(0.92)
+    .clamp(0.2, 1.0);
   let (bg_r, bg_g, bg_b) = (
     ((bg_rgb >> 16) & 0xff) as u8,
     ((bg_rgb >> 8) & 0xff) as u8,
@@ -500,6 +505,9 @@ unsafe fn paint(hwnd: HWND) {
   let bg = CreateSolidBrush(bg_ref); // BGR COLORREF
   FillRect(hdc, &client, bg);
   let _ = DeleteObject(HGDIOBJ(bg.0));
+
+  // overall window alpha; text stays opaque because we paint it ourselves
+  let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), (bg_a * 255.0).round() as u8, LWA_ALPHA);
 
   let padding = ((10.0_f32) * scale).round() as i32;
   let mut title_rect = client;

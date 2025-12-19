@@ -349,7 +349,8 @@ export default function App() {
         kind: payload.kind,
         type: payload.type,
         bg_rgb: bg ?? undefined,
-        scale: settings.overlayScale
+        scale: settings.overlayScale,
+        bg_a: settings.overlayBgOpacity
       },
       settings.overlayToastsPosition
     );
@@ -530,6 +531,24 @@ export default function App() {
                       setSettings((s) => ({
                         ...s,
                         overlayScale: clampInt(Number(e.target.value), 60, 200) / 100
+                      }))
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <label>
+                    Overlay Hintergrund-Transparenz: <span className="pill">{Math.round(settings.overlayBgOpacity * 100)}%</span>
+                  </label>
+                  <input
+                    type="range"
+                    min={20}
+                    max={100}
+                    step={5}
+                    value={Math.round(settings.overlayBgOpacity * 100)}
+                    onChange={(e) =>
+                      setSettings((s) => ({
+                        ...s,
+                        overlayBgOpacity: clampInt(Number(e.target.value), 20, 100) / 100
                       }))
                     }
                   />

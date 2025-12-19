@@ -16,6 +16,7 @@ pub struct OverlayPayload {
   pub event_type: Option<String>,
   pub bg_rgb: Option<u32>,
   pub scale: Option<f32>,
+  pub bg_a: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize)]

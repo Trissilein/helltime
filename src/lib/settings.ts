@@ -27,6 +27,7 @@ export type Settings = {
   overlayToastsPosition: { x: number; y: number } | null;
   overlayBgHex: string; // "#rrggbb"
   overlayScale: number; // 0.6-2.0
+  overlayBgOpacity: number; // 0.2-1.0
   categories: Record<ScheduleType, CategorySettings>;
 };
 
@@ -58,6 +59,7 @@ const defaults: Settings = {
   overlayToastsPosition: null,
   overlayBgHex: "#0b1220",
   overlayScale: 1,
+  overlayBgOpacity: 0.92,
   categories: {
     helltide: defaultCategory(true),
     legion: defaultCategory(true),
@@ -169,6 +171,7 @@ export function loadSettings(): Settings {
       overlayToastsPosition: normalizePosition(raw.overlayToastsPosition),
       overlayBgHex: normalizeHexColor(raw.overlayBgHex, defaults.overlayBgHex),
       overlayScale: clampFloat(raw.overlayScale, defaults.overlayScale, 0.6, 2.0),
+      overlayBgOpacity: clampFloat(raw.overlayBgOpacity, defaults.overlayBgOpacity, 0.2, 1.0),
       categories: {
         helltide: normalizeCategory(rawCategories.helltide, defaults.categories.helltide),
         legion: normalizeCategory(rawCategories.legion, defaults.categories.legion),
@@ -194,6 +197,7 @@ export function loadSettings(): Settings {
       overlayToastsPosition: normalizePosition(v4raw.overlayToastsPosition),
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
+      overlayBgOpacity: defaults.overlayBgOpacity,
       categories: {
         helltide: normalizeCategory(v4raw.categories?.helltide, defaults.categories.helltide),
         legion: normalizeCategory(v4raw.categories?.legion, defaults.categories.legion),
@@ -218,6 +222,7 @@ export function loadSettings(): Settings {
       overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
+      overlayBgOpacity: defaults.overlayBgOpacity,
       categories: {
         helltide: normalizeCategory(v3.categories?.helltide, defaults.categories.helltide),
         legion: normalizeCategory(v3.categories?.legion, defaults.categories.legion),
@@ -246,6 +251,7 @@ export function loadSettings(): Settings {
       overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
+      overlayBgOpacity: defaults.overlayBgOpacity,
       categories: {
         helltide: { enabled: typeof enabled.helltide === "boolean" ? enabled.helltide : true, timerCount, timers: cloneTimers(timers) },
         legion: { enabled: typeof enabled.legion === "boolean" ? enabled.legion : true, timerCount, timers: cloneTimers(timers) },
@@ -279,6 +285,7 @@ export function loadSettings(): Settings {
       overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
+      overlayBgOpacity: defaults.overlayBgOpacity,
       categories: {
         helltide: { enabled, timerCount: 1, timers },
         legion: { ...defaultCategory(false) },
