@@ -37,6 +37,9 @@ export async function setOverviewOverlayEnabled(enabled: boolean): Promise<void>
 
       win.once("tauri://created", () => {
         void win.setAlwaysOnTop(true);
+        window.setTimeout(() => {
+          void win.setAlwaysOnTop(true);
+        }, 250);
       });
 
       win.once("tauri://error", (e) => {

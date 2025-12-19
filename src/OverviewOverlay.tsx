@@ -91,17 +91,14 @@ export default function OverviewOverlay() {
   useEffect(() => {
     const next = loadSettings();
     setSettings(next);
-    if (!next.overviewOverlayEnabled && isTauri()) {
-      void (async () => {
-        try {
-          const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-          await WebviewWindow.getCurrent().hide();
-        } catch {
-          // ignore
-        }
-      })();
-    }
   }, [settingsVersion]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setSettings(loadSettings());
+    }, 750);
+    return () => window.clearInterval(id);
+  }, []);
 
   const nextByType = useMemo(() => {
     if (!schedule) return null;
@@ -148,6 +145,7 @@ export default function OverviewOverlay() {
       {error ? <div className="overlayOverviewError">Fehler</div> : null}
 
       <div className="overlayOverviewRows">
+        {ordered.length === 0 ? <div className="overlayOverviewError">Keine Kategorien ausgewählt</div> : null}
         {ordered.map((type) => {
           const next = nextByType ? nextByType[type] : null;
           const startMs = next ? new Date(next.startTime).getTime() : null;

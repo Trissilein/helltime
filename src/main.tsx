@@ -7,20 +7,21 @@ import { enablePanicStop, startUiWatchdog } from "./lib/safety";
 import { initMainWindowPersistence, initWindowPersistence } from "./lib/window_state";
 import "./styles.css";
 
-window.addEventListener("error", (e) => {
-  void enablePanicStop(e.error ?? e.message);
-});
-
-window.addEventListener("unhandledrejection", (e) => {
-  void enablePanicStop((e as PromiseRejectionEvent).reason);
-});
-
-startUiWatchdog();
-
 const view = new URLSearchParams(window.location.search).get("view");
+if (view !== "overview") {
+  window.addEventListener("error", (e) => {
+    void enablePanicStop(e.error ?? e.message);
+  });
+
+  window.addEventListener("unhandledrejection", (e) => {
+    void enablePanicStop((e as PromiseRejectionEvent).reason);
+  });
+}
+
 if (view === "overview") {
   void initWindowPersistence("helltime:overviewWindowBounds");
 } else {
+  startUiWatchdog();
   void initMainWindowPersistence();
 }
 

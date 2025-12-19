@@ -411,10 +411,12 @@ export default function App() {
   }
 
   async function saveOverlayPosition(): Promise<void> {
+    await overlayExitConfig();
+    // give the native window thread time to persist the last dragged position
+    await new Promise((r) => window.setTimeout(r, 120));
     const pos = await overlayGetPosition();
     if (!pos) return;
     setSettings((s) => ({ ...s, overlayToastsEnabled: true, overlayToastsPosition: pos }));
-    await overlayExitConfig();
     setOverlaySavedAt(Date.now());
   }
 
@@ -449,6 +451,22 @@ export default function App() {
                   onChange={(e) => setSettings((s) => ({ ...s, autoRefreshEnabled: e.target.checked }))}
                 />
                 <span className="toggleLabel">Auto</span>
+              </label>
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  disabled={panicStopEnabled}
+                  checked={settings.overviewOverlayEnabled}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setSettings((s) => {
+                      const next = { ...s, overviewOverlayEnabled: checked };
+                      saveSettings(next);
+                      return next;
+                    });
+                  }}
+                />
+                <span className="toggleLabel">Übersicht</span>
               </label>
               <button className="btn primary" type="button" onClick={() => void openExternalUrl("https://helltides.com")}>
                 Quelle
@@ -526,61 +544,65 @@ export default function App() {
                     </label>
                   </div>
 
-                  <div className="inline">
-                    <div className="hint">Overlay Übersicht (Topmost)</div>
-                    <label className="toggle">
-                      <input
-                        type="checkbox"
-                        disabled={panicStopEnabled}
-                        checked={settings.overviewOverlayEnabled}
-                        onChange={(e) => setSettings((s) => ({ ...s, overviewOverlayEnabled: e.target.checked }))}
-                      />
-                      <span className="toggleLabel">{settings.overviewOverlayEnabled ? "an" : "aus"}</span>
-                    </label>
-                  </div>
-
                   <div className="field">
-                    <label className="hint">Permanent Overlay Inhalte</label>
+                    <label className="hint">
+                      Permanent Overlay (Übersicht): <span className="pill small">{settings.overviewOverlayEnabled ? "an" : "aus"}</span>
+                    </label>
                     <div className="toggleRow">
                       <label className="toggle">
                         <input
                           type="checkbox"
-                          disabled={panicStopEnabled || !settings.overviewOverlayEnabled}
+                          disabled={panicStopEnabled}
                           checked={settings.overviewOverlayCategories.legion}
-                          onChange={(e) =>
-                            setSettings((s) => ({
-                              ...s,
-                              overviewOverlayCategories: { ...s.overviewOverlayCategories, legion: e.target.checked }
-                            }))
-                          }
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSettings((s) => {
+                              const next = {
+                                ...s,
+                                overviewOverlayCategories: { ...s.overviewOverlayCategories, legion: checked }
+                              };
+                              saveSettings(next);
+                              return next;
+                            });
+                          }}
                         />
                         <span className="toggleLabel">Legion</span>
                       </label>
                       <label className="toggle">
                         <input
                           type="checkbox"
-                          disabled={panicStopEnabled || !settings.overviewOverlayEnabled}
+                          disabled={panicStopEnabled}
                           checked={settings.overviewOverlayCategories.helltide}
-                          onChange={(e) =>
-                            setSettings((s) => ({
-                              ...s,
-                              overviewOverlayCategories: { ...s.overviewOverlayCategories, helltide: e.target.checked }
-                            }))
-                          }
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSettings((s) => {
+                              const next = {
+                                ...s,
+                                overviewOverlayCategories: { ...s.overviewOverlayCategories, helltide: checked }
+                              };
+                              saveSettings(next);
+                              return next;
+                            });
+                          }}
                         />
                         <span className="toggleLabel">Helltide</span>
                       </label>
                       <label className="toggle">
                         <input
                           type="checkbox"
-                          disabled={panicStopEnabled || !settings.overviewOverlayEnabled}
+                          disabled={panicStopEnabled}
                           checked={settings.overviewOverlayCategories.world_boss}
-                          onChange={(e) =>
-                            setSettings((s) => ({
-                              ...s,
-                              overviewOverlayCategories: { ...s.overviewOverlayCategories, world_boss: e.target.checked }
-                            }))
-                          }
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSettings((s) => {
+                              const next = {
+                                ...s,
+                                overviewOverlayCategories: { ...s.overviewOverlayCategories, world_boss: checked }
+                              };
+                              saveSettings(next);
+                              return next;
+                            });
+                          }}
                         />
                         <span className="toggleLabel">World Boss</span>
                       </label>
