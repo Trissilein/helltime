@@ -287,6 +287,29 @@ input {
   font-size: 12px;
 }
 
+.warning {
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 14px;
+  background: rgba(251, 191, 36, 0.08);
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.warningTitle {
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 2px;
+}
+
+.warningBody {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
 @media (min-width: 880px) {
   .card.span6 {
     grid-column: span 6;

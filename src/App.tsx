@@ -7,6 +7,7 @@ import { formatRemainingSpeech, speak } from "./lib/speech";
 import type { ScheduleResponse, ScheduleType, WorldBossScheduleItem } from "./lib/types";
 import { overlayEnterConfig, overlayExitConfig, overlayGetPosition, overlayShow } from "./lib/overlay";
 import { openExternalUrl } from "./lib/external";
+import { disablePanicStop, isPanicStopEnabled } from "./lib/safety";
 
 type FiredMap = Record<string, number>;
 
@@ -112,6 +113,7 @@ export default function App() {
     legion: false,
     world_boss: false
   }));
+  const [panicStopEnabled, setPanicStopEnabled] = useState(() => isPanicStopEnabled());
 
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const firedRef = useRef<FiredMap>(loadFired());
@@ -119,6 +121,15 @@ export default function App() {
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const onPanic = (e: Event) => {
+      const enabled = Boolean((e as CustomEvent).detail?.enabled);
+      setPanicStopEnabled(enabled);
+    };
+    window.addEventListener("helltime:panic-stop", onPanic);
+    return () => window.removeEventListener("helltime:panic-stop", onPanic);
   }, []);
 
   useEffect(() => {
@@ -232,6 +243,7 @@ export default function App() {
 
   useEffect(() => {
     if (!schedule) return;
+    if (panicStopEnabled) return;
 
     const fireWindowMs = 30_000;
     const ttsPauseMs = 500;
@@ -329,6 +341,7 @@ export default function App() {
   }
 
   async function showOverlayToast(payload: { title: string; body: string; type?: ScheduleType; kind?: "event" | "debug" }) {
+    if (panicStopEnabled) return;
     if (!settings.overlayToastsEnabled) return;
     const bg = hexToRgbInt(settings.overlayBgHex);
     await overlayShow(
@@ -350,6 +363,7 @@ export default function App() {
   }
 
   function testVolumeBeep(volumeOverride?: number): void {
+    if (panicStopEnabled) return;
     if (!settings.soundEnabled) return;
     const sampleTimer = settings.categories.helltide.timers[0];
     playBeep(sampleTimer.beepPattern, sampleTimer.pitchHz, typeof volumeOverride === "number" ? volumeOverride : settings.volume);
@@ -374,6 +388,7 @@ export default function App() {
               <label className="switch">
                 <input
                   type="checkbox"
+                  disabled={panicStopEnabled}
                   checked={settings.autoRefreshEnabled}
                   onChange={(e) => setSettings((s) => ({ ...s, autoRefreshEnabled: e.target.checked }))}
                 />
@@ -398,6 +413,26 @@ export default function App() {
         <div className="card span12">
           <h2>Intro & Settings</h2>
           <div className="form">
+            {panicStopEnabled ? (
+              <div className="warning">
+                <div>
+                  <div className="warningTitle">Sicherheits-Stopp aktiv</div>
+                  <div className="warningBody">Overlay/Ton/Auto sind pausiert (UI-Fehler erkannt).</div>
+                </div>
+                <div className="actions">
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => {
+                      disablePanicStop();
+                      window.location.reload();
+                    }}
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <div className="inline">
               <div className="hint">Nächstes Event (aktivierte Kategorien)</div>
               <div className="pill">
@@ -428,6 +463,7 @@ export default function App() {
                   <label className="switch">
                     <input
                       type="checkbox"
+                      disabled={panicStopEnabled}
                       checked={settings.overlayToastsEnabled}
                       onChange={(e) => setSettings((s) => ({ ...s, overlayToastsEnabled: e.target.checked }))}
                     />
@@ -443,6 +479,7 @@ export default function App() {
                   <label className="switch">
                     <input
                       type="checkbox"
+                      disabled={panicStopEnabled}
                       checked={settings.soundEnabled}
                       onChange={(e) => setSettings((s) => ({ ...s, soundEnabled: e.target.checked }))}
                     />
@@ -472,6 +509,7 @@ export default function App() {
                 <button
                   className="btn"
                   type="button"
+                  disabled={panicStopEnabled}
                   onClick={() => void showOverlayToast({ title: "helltime", body: "Overlay Toast Test", kind: "debug" })}
                 >
                   Test

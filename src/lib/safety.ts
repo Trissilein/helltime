@@ -1,6 +1,7 @@
 import { overlayHide } from "./overlay";
 
 const PANIC_KEY = "helltime:panicStop";
+const PANIC_EVENT = "helltime:panic-stop";
 let watchdogTimer: number | null = null;
 let watchdogBadCount = 0;
 let watchdogArmedAt = 0;
@@ -26,6 +27,12 @@ export async function enablePanicStop(reason?: unknown): Promise<void> {
   }
 
   try {
+    window.dispatchEvent(new CustomEvent(PANIC_EVENT, { detail: { enabled: true } }));
+  } catch {
+    // ignore
+  }
+
+  try {
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   } catch {
     // ignore
@@ -44,6 +51,12 @@ export async function enablePanicStop(reason?: unknown): Promise<void> {
 export function disablePanicStop(): void {
   try {
     localStorage.removeItem(PANIC_KEY);
+  } catch {
+    // ignore
+  }
+
+  try {
+    window.dispatchEvent(new CustomEvent(PANIC_EVENT, { detail: { enabled: false } }));
   } catch {
     // ignore
   }
