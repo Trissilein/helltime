@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { enablePanicStop, startUiWatchdog } from "./lib/safety";
+import { initMainWindowPersistence } from "./lib/window_state";
 import "./styles.css";
 
 window.addEventListener("error", (e) => {
@@ -14,6 +15,7 @@ window.addEventListener("unhandledrejection", (e) => {
 });
 
 startUiWatchdog();
+void initMainWindowPersistence();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

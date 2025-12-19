@@ -9,7 +9,7 @@ use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
   BeginPaint, CreateFontW, CreateSolidBrush, DeleteObject, DrawTextW, EndPaint, FillRect, GetDeviceCaps, InvalidateRect,
   SelectObject, SetBkMode, SetTextColor, CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, DEFAULT_PITCH, DEFAULT_QUALITY,
-  DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_TOP, FF_DONTCARE, OUT_DEFAULT_PRECIS, HDC, HGDIOBJ, HFONT, PAINTSTRUCT,
+  DT_CENTER, DT_END_ELLIPSIS, DT_NOPREFIX, DT_SINGLELINE, DT_VCENTER, FF_DONTCARE, OUT_DEFAULT_PRECIS, HDC, HGDIOBJ, HFONT, PAINTSTRUCT,
   TRANSPARENT,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -30,6 +30,8 @@ const WM_OVERLAY_ENTER_CONFIG: u32 = WM_APP + 43;
 const WM_OVERLAY_EXIT_CONFIG: u32 = WM_APP + 44;
 const WM_OVERLAY_SET_POS: u32 = WM_APP + 45;
 const TIMER_HIDE: usize = 1;
+const BASE_W: i32 = 280;
+const BASE_H: i32 = 110;
 
 #[derive(Clone)]
 pub struct OverlayManager {
@@ -399,9 +401,22 @@ unsafe fn set_visible(hwnd: HWND, visible: bool, ctx: Option<&'static mut Window
 
 unsafe fn apply_position(hwnd: HWND, shared: &Shared) {
   let pos = shared.position.lock().ok().and_then(|p| p.clone());
+  let scale = current_scale(shared);
+  let w = ((BASE_W as f32) * scale).round() as i32;
+  let h = ((BASE_H as f32) * scale).round() as i32;
   if let Some(p) = pos {
-    let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), p.x, p.y, 280, 110, SWP_NOACTIVATE);
+    let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), p.x, p.y, w, h, SWP_NOACTIVATE);
   }
+}
+
+fn current_scale(shared: &Shared) -> f32 {
+  let scale = shared
+    .toast
+    .lock()
+    .ok()
+    .and_then(|t| t.as_ref().and_then(|p| p.scale))
+    .unwrap_or(1.0);
+  scale.clamp(0.6, 2.0)
 }
 
 unsafe fn paint(hwnd: HWND) {
@@ -415,11 +430,17 @@ unsafe fn paint(hwnd: HWND) {
   }
   let ctx = ctx.unwrap();
 
-  // fonts (lazy)
-  if ctx.font_title.is_none() || ctx.font_body.is_none() {
+  // fonts (recreate each paint so scaling always applies)
+  if let Some(f) = ctx.font_title.take() {
+    let _ = DeleteObject(HGDIOBJ(f.0));
+  }
+  if let Some(f) = ctx.font_body.take() {
+    let _ = DeleteObject(HGDIOBJ(f.0));
+  }
+  {
     let dpi = GetDeviceCaps(Some(hdc), windows::Win32::Graphics::Gdi::LOGPIXELSY);
-    let title_px = -mul_div(14, dpi, 72);
-    let body_px = -mul_div(12, dpi, 72);
+    let title_px = -mul_div(((14.0_f32) * scale).round() as i32, dpi, 72);
+    let body_px = -mul_div(((12.0_f32) * scale).round() as i32, dpi, 72);
     ctx.font_title = Some(CreateFontW(
       title_px,
       0,
@@ -466,6 +487,7 @@ unsafe fn paint(hwnd: HWND) {
   };
 
   let toast = ctx.shared.toast.lock().ok().and_then(|t| t.clone());
+  let scale = current_scale(&ctx.shared);
   let bg_rgb = toast.as_ref().and_then(|t| t.bg_rgb).unwrap_or(0x0b1220);
   let (bg_r, bg_g, bg_b) = (
     ((bg_rgb >> 16) & 0xff) as u8,
@@ -479,18 +501,18 @@ unsafe fn paint(hwnd: HWND) {
   FillRect(hdc, &client, bg);
   let _ = DeleteObject(HGDIOBJ(bg.0));
 
-  let padding = 10;
+  let padding = ((10.0_f32) * scale).round() as i32;
   let mut title_rect = client;
   title_rect.left += padding;
   title_rect.right -= padding;
-  title_rect.top += 8;
-  title_rect.bottom = title_rect.top + 22;
+  title_rect.top += ((8.0_f32) * scale).round() as i32;
+  title_rect.bottom = title_rect.top + ((26.0_f32) * scale).round() as i32;
 
   let mut body_rect = client;
   body_rect.left += padding;
   body_rect.right -= padding;
-  body_rect.top = title_rect.bottom + 2;
-  body_rect.bottom -= 8;
+  body_rect.top = title_rect.bottom + ((2.0_f32) * scale).round() as i32;
+  body_rect.bottom -= ((8.0_f32) * scale).round() as i32;
 
   let cfg = ctx.shared.config_mode.lock().ok().map(|g| *g).unwrap_or(false);
 
@@ -502,41 +524,53 @@ unsafe fn paint(hwnd: HWND) {
     ("helltime".to_string(), "—".to_string())
   };
 
-  let title_color = match toast.as_ref().and_then(|t| t.event_type.as_deref()) {
+  let text_color = match toast.as_ref().and_then(|t| t.event_type.as_deref()) {
     Some("helltide") => COLORREF(0x3c92fb),   // #fb923c
     Some("legion") => COLORREF(0x4444ef),     // #ef4444
     Some("world_boss") => COLORREF(0x24bffb), // #fbbf24
     _ => COLORREF(0xEDEDED),
   };
+  let outline_color = COLORREF(0x101010);
 
   SetBkMode(hdc, TRANSPARENT);
   if let Some(f) = ctx.font_title {
     let _ = SelectObject(hdc, HGDIOBJ(f.0));
   }
-  SetTextColor(hdc, title_color);
-  let mut title_w: Vec<u16> = title.encode_utf16().collect();
-  let _ = DrawTextW(
-    hdc,
-    title_w.as_mut_slice(),
-    &mut title_rect,
-    DT_LEFT | DT_TOP | DT_END_ELLIPSIS | DT_NOPREFIX,
-  );
+  draw_text_outlined(hdc, &title, &mut title_rect, text_color, outline_color, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
 
   if let Some(f) = ctx.font_body {
     let _ = SelectObject(hdc, HGDIOBJ(f.0));
   }
-  SetTextColor(hdc, COLORREF(0xC8C8C8));
-  let mut body_w: Vec<u16> = body.encode_utf16().collect();
-  let _ = DrawTextW(
-    hdc,
-    body_w.as_mut_slice(),
-    &mut body_rect,
-    DT_LEFT | DT_TOP | DT_END_ELLIPSIS | DT_NOPREFIX,
-  );
+  draw_text_outlined(hdc, &body, &mut body_rect, text_color, outline_color, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
 
   let _ = EndPaint(hwnd, &ps);
 }
 
 fn mul_div(number: i32, numerator: i32, denominator: i32) -> i32 {
   ((number as i64 * numerator as i64) / denominator as i64) as i32
+}
+
+unsafe fn draw_text_outlined(
+  hdc: HDC,
+  text: &str,
+  rect: &mut RECT,
+  color: COLORREF,
+  outline: COLORREF,
+  format: u32,
+) {
+  let mut buf: Vec<u16> = text.encode_utf16().collect();
+
+  // Outline: 4-direction (1px)
+  for (dx, dy) in [(-1, -1), (1, -1), (-1, 1), (1, 1)] {
+    let mut r = *rect;
+    r.left += dx;
+    r.right += dx;
+    r.top += dy;
+    r.bottom += dy;
+    SetTextColor(hdc, outline);
+    let _ = DrawTextW(hdc, buf.as_mut_slice(), &mut r, format);
+  }
+
+  SetTextColor(hdc, color);
+  let _ = DrawTextW(hdc, buf.as_mut_slice(), rect, format);
 }

@@ -8,6 +8,7 @@ export type OverlayPayload = {
   kind?: string;
   type?: "helltide" | "legion" | "world_boss";
   bg_rgb?: number;
+  scale?: number;
 };
 
 export type OverlayStatus = {

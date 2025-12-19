@@ -343,7 +343,14 @@ export default function App() {
     if (!settings.overlayToastsEnabled) return;
     const bg = hexToRgbInt(settings.overlayBgHex);
     await overlayShow(
-      { title: payload.title, body: payload.body, kind: payload.kind, type: payload.type, bg_rgb: bg ?? undefined },
+      {
+        title: payload.title,
+        body: payload.body,
+        kind: payload.kind,
+        type: payload.type,
+        bg_rgb: bg ?? undefined,
+        scale: settings.overlayScale
+      },
       settings.overlayToastsPosition
     );
   }
@@ -509,6 +516,24 @@ export default function App() {
             </div>
 
                 {overlaySavedAt ? <div className="hint">Gespeichert: {formatClock(overlaySavedAt)}</div> : null}
+                <div className="field">
+                  <label>
+                    Overlay Skalierung: <span className="pill">{Math.round(settings.overlayScale * 100)}%</span>
+                  </label>
+                  <input
+                    type="range"
+                    min={60}
+                    max={200}
+                    step={5}
+                    value={Math.round(settings.overlayScale * 100)}
+                    onChange={(e) =>
+                      setSettings((s) => ({
+                        ...s,
+                        overlayScale: clampInt(Number(e.target.value), 60, 200) / 100
+                      }))
+                    }
+                  />
+                </div>
                 <div className="field">
                   <label>
                     Lautstärke: <span className="pill">{Math.round(settings.volume * 100)}%</span>
