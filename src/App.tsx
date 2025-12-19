@@ -539,6 +539,54 @@ export default function App() {
                     </label>
                   </div>
 
+                  <div className="field">
+                    <label className="hint">Permanent Overlay Inhalte</label>
+                    <div className="toggleRow">
+                      <label className="toggle">
+                        <input
+                          type="checkbox"
+                          disabled={panicStopEnabled || !settings.overviewOverlayEnabled}
+                          checked={settings.overviewOverlayCategories.legion}
+                          onChange={(e) =>
+                            setSettings((s) => ({
+                              ...s,
+                              overviewOverlayCategories: { ...s.overviewOverlayCategories, legion: e.target.checked }
+                            }))
+                          }
+                        />
+                        <span className="toggleLabel">Legion</span>
+                      </label>
+                      <label className="toggle">
+                        <input
+                          type="checkbox"
+                          disabled={panicStopEnabled || !settings.overviewOverlayEnabled}
+                          checked={settings.overviewOverlayCategories.helltide}
+                          onChange={(e) =>
+                            setSettings((s) => ({
+                              ...s,
+                              overviewOverlayCategories: { ...s.overviewOverlayCategories, helltide: e.target.checked }
+                            }))
+                          }
+                        />
+                        <span className="toggleLabel">Helltide</span>
+                      </label>
+                      <label className="toggle">
+                        <input
+                          type="checkbox"
+                          disabled={panicStopEnabled || !settings.overviewOverlayEnabled}
+                          checked={settings.overviewOverlayCategories.world_boss}
+                          onChange={(e) =>
+                            setSettings((s) => ({
+                              ...s,
+                              overviewOverlayCategories: { ...s.overviewOverlayCategories, world_boss: e.target.checked }
+                            }))
+                          }
+                        />
+                        <span className="toggleLabel">World Boss</span>
+                      </label>
+                    </div>
+                  </div>
+
                   <div className="inline">
                     <div className="hint">Ton</div>
                     <label className="toggle">

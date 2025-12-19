@@ -48,6 +48,7 @@ export default function OverviewOverlay() {
   const [now, setNow] = useState(() => Date.now());
   const [lastRefreshAt, setLastRefreshAt] = useState<number | null>(null);
   const [settingsVersion, setSettingsVersion] = useState(0);
+  const [settings, setSettings] = useState(() => loadSettings());
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
@@ -88,8 +89,9 @@ export default function OverviewOverlay() {
   }, []);
 
   useEffect(() => {
-    const settings = loadSettings();
-    if (!settings.overviewOverlayEnabled && isTauri()) {
+    const next = loadSettings();
+    setSettings(next);
+    if (!next.overviewOverlayEnabled && isTauri()) {
       void (async () => {
         try {
           const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
@@ -112,7 +114,8 @@ export default function OverviewOverlay() {
 
   const ordered = useMemo(() => {
     if (!nextByType) return [...types];
-    return [...types]
+    const enabledTypes = types.filter((t) => settings.overviewOverlayCategories?.[t] !== false);
+    return [...enabledTypes]
       .map((type) => {
         const next = nextByType[type];
         const startMs = next ? new Date(next.startTime).getTime() : Number.POSITIVE_INFINITY;
@@ -120,7 +123,7 @@ export default function OverviewOverlay() {
       })
       .sort((a, b) => a.startMs - b.startMs)
       .map((x) => x.type);
-  }, [nextByType]);
+  }, [nextByType, settings.overviewOverlayCategories]);
 
   const lastUpdateLabel = useMemo(() => {
     if (!lastRefreshAt) return "—";

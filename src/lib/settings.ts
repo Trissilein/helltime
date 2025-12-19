@@ -25,6 +25,7 @@ export type Settings = {
   autoRefreshEnabled: boolean;
   overlayToastsEnabled: boolean;
   overviewOverlayEnabled: boolean;
+  overviewOverlayCategories: Record<ScheduleType, boolean>;
   overlayToastsPosition: { x: number; y: number } | null;
   overlayBgHex: string; // "#rrggbb"
   overlayScale: number; // 0.6-2.0
@@ -58,6 +59,11 @@ const defaults: Settings = {
   autoRefreshEnabled: false,
   overlayToastsEnabled: false,
   overviewOverlayEnabled: false,
+  overviewOverlayCategories: {
+    helltide: true,
+    legion: true,
+    world_boss: true
+  },
   overlayToastsPosition: null,
   overlayBgHex: "#0b1220",
   overlayScale: 1,
@@ -157,6 +163,7 @@ export function loadSettings(): Settings {
   if (v4 && typeof v4 === "object" && (v4 as any).version === 6) {
     const raw = v4 as any;
     const rawCategories = raw.categories ?? {};
+    const rawOverviewCats = raw.overviewOverlayCategories ?? {};
 
     const base: Settings = {
       version: 6,
@@ -172,6 +179,20 @@ export function loadSettings(): Settings {
       overlayToastsEnabled: typeof raw.overlayToastsEnabled === "boolean" ? raw.overlayToastsEnabled : defaults.overlayToastsEnabled,
       overviewOverlayEnabled:
         typeof raw.overviewOverlayEnabled === "boolean" ? raw.overviewOverlayEnabled : defaults.overviewOverlayEnabled,
+      overviewOverlayCategories: {
+        helltide:
+          typeof rawOverviewCats.helltide === "boolean"
+            ? rawOverviewCats.helltide
+            : defaults.overviewOverlayCategories.helltide,
+        legion:
+          typeof rawOverviewCats.legion === "boolean"
+            ? rawOverviewCats.legion
+            : defaults.overviewOverlayCategories.legion,
+        world_boss:
+          typeof rawOverviewCats.world_boss === "boolean"
+            ? rawOverviewCats.world_boss
+            : defaults.overviewOverlayCategories.world_boss
+      },
       overlayToastsPosition: normalizePosition(raw.overlayToastsPosition),
       overlayBgHex: normalizeHexColor(raw.overlayBgHex, defaults.overlayBgHex),
       overlayScale: clampFloat(raw.overlayScale, defaults.overlayScale, 0.6, 2.0),
@@ -199,6 +220,7 @@ export function loadSettings(): Settings {
       autoRefreshEnabled: defaults.autoRefreshEnabled,
       overlayToastsEnabled: typeof v4raw.overlayToastsEnabled === "boolean" ? v4raw.overlayToastsEnabled : defaults.overlayToastsEnabled,
       overviewOverlayEnabled: defaults.overviewOverlayEnabled,
+      overviewOverlayCategories: defaults.overviewOverlayCategories,
       overlayToastsPosition: normalizePosition(v4raw.overlayToastsPosition),
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
@@ -225,6 +247,7 @@ export function loadSettings(): Settings {
       autoRefreshEnabled: defaults.autoRefreshEnabled,
       overlayToastsEnabled: defaults.overlayToastsEnabled,
       overviewOverlayEnabled: defaults.overviewOverlayEnabled,
+      overviewOverlayCategories: defaults.overviewOverlayCategories,
       overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
@@ -255,6 +278,7 @@ export function loadSettings(): Settings {
       autoRefreshEnabled: defaults.autoRefreshEnabled,
       overlayToastsEnabled: defaults.overlayToastsEnabled,
       overviewOverlayEnabled: defaults.overviewOverlayEnabled,
+      overviewOverlayCategories: defaults.overviewOverlayCategories,
       overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
@@ -290,6 +314,7 @@ export function loadSettings(): Settings {
       autoRefreshEnabled: defaults.autoRefreshEnabled,
       overlayToastsEnabled: defaults.overlayToastsEnabled,
       overviewOverlayEnabled: defaults.overviewOverlayEnabled,
+      overviewOverlayCategories: defaults.overviewOverlayCategories,
       overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,

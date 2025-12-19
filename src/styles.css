@@ -300,6 +300,13 @@ input {
   gap: 10px;
 }
 
+.toggleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
 .hint {
   color: var(--muted);
   font-size: 12px;

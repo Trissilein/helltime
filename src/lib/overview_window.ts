@@ -18,6 +18,9 @@ export async function setOverviewOverlayEnabled(enabled: boolean): Promise<void>
       const win = new WebviewWindow(OVERVIEW_LABEL, {
         title: "helltime overlay",
         url: "/?view=overview",
+        center: true,
+        x: 40,
+        y: 40,
         width: 320,
         height: 140,
         minWidth: 260,
@@ -27,8 +30,13 @@ export async function setOverviewOverlayEnabled(enabled: boolean): Promise<void>
         skipTaskbar: true,
         resizable: true,
         focus: false,
+        focusable: false,
         transparent: false,
         visible: true
+      });
+
+      win.once("tauri://created", () => {
+        void win.setAlwaysOnTop(true);
       });
 
       win.once("tauri://error", (e) => {
@@ -47,4 +55,3 @@ export async function setOverviewOverlayEnabled(enabled: boolean): Promise<void>
     console.warn("setOverviewOverlayEnabled failed", e);
   }
 }
-
