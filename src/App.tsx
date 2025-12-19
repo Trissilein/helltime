@@ -404,12 +404,25 @@ export default function App() {
                 {nextEnabledOverall ? `${nextEnabledOverall.name} • ${formatLocalTime(nextEnabledOverall.startTime)}` : "—"}
               </div>
             </div>
-            <details className="section" open={notificationsOpen} onToggle={(e) => setNotificationsOpen((e.currentTarget as HTMLDetailsElement).open)}>
-              <summary className="sectionHeader">
+            <div className={`section ${notificationsOpen ? "open" : ""}`}>
+              <div
+                className="sectionHeader"
+                role="button"
+                tabIndex={0}
+                aria-expanded={notificationsOpen}
+                onClick={() => setNotificationsOpen((v) => !v)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setNotificationsOpen((v) => !v);
+                  }
+                }}
+              >
                 <div className="sectionTitle">Benachrichtigungen</div>
                 <div className="pill small">Overlay + Ton</div>
-              </summary>
-              <div className="sectionBody">
+              </div>
+              {notificationsOpen ? (
+                <div className="sectionBody">
                 <div className="inline">
                   <div className="hint">Overlay Toast (Topmost)</div>
                   <label className="switch">
@@ -488,8 +501,9 @@ export default function App() {
                     }}
                   />
                 </div>
-              </div>
-            </details>
+                </div>
+              ) : null}
+            </div>
             <div className="hint">Kategorien aktivieren und Timer pro Kategorie konfigurieren.</div>
             {error ? <div className="error">Fehler: {error}</div> : null}
           </div>
@@ -504,14 +518,27 @@ export default function App() {
           const name = getEventName(type, next);
           const spokenName = getSpokenEventName(type, next);
 
+          const isOpen = category.enabled && categoryOpen[type];
+
           return (
-            <details
-              className={`card span12 categoryCard ${type} categoryDetails`}
-              key={type}
-              open={category.enabled && categoryOpen[type]}
-              onToggle={(e) => setCategoryOpen((s) => ({ ...s, [type]: (e.currentTarget as HTMLDetailsElement).open }))}
-            >
-              <summary className="categorySummary">
+            <div className={`card span12 categoryCard ${type} categoryDetails ${isOpen ? "open" : ""}`} key={type}>
+              <div
+                className="categorySummary"
+                role="button"
+                tabIndex={0}
+                aria-expanded={isOpen}
+                onClick={() => {
+                  if (!category.enabled) return;
+                  setCategoryOpen((s) => ({ ...s, [type]: !s[type] }));
+                }}
+                onKeyDown={(e) => {
+                  if (!category.enabled) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setCategoryOpen((s) => ({ ...s, [type]: !s[type] }));
+                  }
+                }}
+              >
                 <div className="row">
                   <div className="kpi">
                     <div className="label">{name}</div>
@@ -535,11 +562,10 @@ export default function App() {
                     </label>
                   </div>
                 </div>
-              </summary>
+              </div>
 
               <div className="form">
-
-                {category.enabled ? (
+                {category.enabled && isOpen ? (
                   <>
                     <div className="inline" style={{ justifyContent: "space-between" }}>
                       <div className="hint">Timer Anzahl</div>
@@ -655,7 +681,7 @@ export default function App() {
                   </>
                 ) : null}
               </div>
-            </details>
+            </div>
           );
         })}
       </div>

@@ -1,5 +1,6 @@
 import type { ScheduleType } from "./types";
 import { readJson, writeJson } from "./storage";
+import { isPanicStopEnabled } from "./safety";
 
 export type BeepPattern = "beep" | "double" | "triple";
 
@@ -146,7 +147,7 @@ export function loadSettings(): Settings {
     const raw = v4 as any;
     const rawCategories = raw.categories ?? {};
 
-    return {
+    const base: Settings = {
       version: 6,
       volume: clampUnit(raw.volume, defaults.volume),
       systemToastsEnabled:
@@ -166,11 +167,15 @@ export function loadSettings(): Settings {
         world_boss: normalizeCategory(rawCategories.world_boss, defaults.categories.world_boss)
       }
     };
+    if (isPanicStopEnabled()) {
+      return { ...base, overlayToastsEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+    }
+    return base;
   }
 
   const v4raw = readJson<any>("settings_v4", null);
   if (v4raw && typeof v4raw === "object" && v4raw.version === 4) {
-    return {
+    const base: Settings = {
       version: 6,
       volume: clampUnit(v4raw.volume, defaults.volume),
       systemToastsEnabled:
@@ -186,11 +191,15 @@ export function loadSettings(): Settings {
         world_boss: normalizeCategory(v4raw.categories?.world_boss, defaults.categories.world_boss)
       }
     };
+    if (isPanicStopEnabled()) {
+      return { ...base, overlayToastsEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+    }
+    return base;
   }
 
   const v3 = readJson<any>("settings_v3", null);
   if (v3 && typeof v3 === "object" && v3.version === 3) {
-    return {
+    const base: Settings = {
       version: 6,
       volume: clampUnit(v3.volume, defaults.volume),
       systemToastsEnabled: typeof v3.systemToastsEnabled === "boolean" ? v3.systemToastsEnabled : defaults.systemToastsEnabled,
@@ -205,6 +214,10 @@ export function loadSettings(): Settings {
         world_boss: normalizeCategory(v3.categories?.world_boss, defaults.categories.world_boss)
       }
     };
+    if (isPanicStopEnabled()) {
+      return { ...base, overlayToastsEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+    }
+    return base;
   }
 
   const v2 = readJson<any>("settings_v2", null);
@@ -213,7 +226,7 @@ export function loadSettings(): Settings {
     const timerCount = v2.levelCount === 1 || v2.levelCount === 2 || v2.levelCount === 3 ? v2.levelCount : 3;
     const timers = timersFromV2(v2.levels);
 
-    return {
+    const base: Settings = {
       version: 6,
       volume: defaults.volume,
       systemToastsEnabled: defaults.systemToastsEnabled,
@@ -232,6 +245,10 @@ export function loadSettings(): Settings {
         }
       }
     };
+    if (isPanicStopEnabled()) {
+      return { ...base, overlayToastsEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+    }
+    return base;
   }
 
   const v1 = readJson<any>("settings", null);
@@ -241,7 +258,7 @@ export function loadSettings(): Settings {
     const timers = defaultTimers();
     timers[0] = { ...timers[0], minutesBefore };
 
-    return {
+    const base: Settings = {
       version: 6,
       volume: defaults.volume,
       systemToastsEnabled: defaults.systemToastsEnabled,
@@ -256,8 +273,15 @@ export function loadSettings(): Settings {
         world_boss: { ...defaultCategory(false) }
       }
     };
+    if (isPanicStopEnabled()) {
+      return { ...base, overlayToastsEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+    }
+    return base;
   }
 
+  if (isPanicStopEnabled()) {
+    return { ...defaults, overlayToastsEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+  }
   return defaults;
 }
 

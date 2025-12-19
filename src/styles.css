@@ -201,7 +201,7 @@ input {
   padding: 0;
 }
 
-.categoryDetails > summary {
+.categoryDetails > .categorySummary {
   padding: 12px;
 }
 
@@ -463,7 +463,7 @@ input {
   background: rgba(255, 255, 255, 0.03);
 }
 
-.section[open] .sectionHeader {
+.section.open .sectionHeader {
   background: rgba(255, 255, 255, 0.05);
 }
 
@@ -478,10 +478,6 @@ input {
   cursor: pointer;
 }
 
-summary.sectionHeader::-webkit-details-marker {
-  display: none;
-}
-
 .sectionHeader::after {
   content: "▸";
   color: rgba(255, 255, 255, 0.7);
@@ -490,7 +486,7 @@ summary.sectionHeader::-webkit-details-marker {
   transition: transform 140ms ease;
 }
 
-details[open] > summary.sectionHeader::after {
+.section.open .sectionHeader::after {
   transform: rotate(90deg);
 }
 
@@ -500,10 +496,6 @@ details[open] > summary.sectionHeader::after {
   display: block;
   padding: 0;
   position: relative;
-}
-
-summary.categorySummary::-webkit-details-marker {
-  display: none;
 }
 
 .categorySummary::after {
@@ -517,11 +509,11 @@ summary.categorySummary::-webkit-details-marker {
   pointer-events: none;
 }
 
-details[open].categoryDetails > summary.categorySummary::after {
+.categoryDetails.open > .categorySummary::after {
   transform: rotate(90deg);
 }
 
-.categoryDetails > summary.categorySummary .row {
+.categoryDetails > .categorySummary .row {
   padding-right: 18px;
 }
 
