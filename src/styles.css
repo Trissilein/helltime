@@ -465,6 +465,7 @@ input {
   padding: 10px 12px;
   background: rgba(255, 255, 255, 0.04);
   border-bottom: 1px solid var(--border);
+  min-height: 52px;
 }
 
 .panelHeaderRight {
@@ -482,7 +483,7 @@ input {
   color: inherit;
   cursor: pointer;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   min-width: 0;
   text-align: left;
@@ -499,6 +500,11 @@ input {
   font-weight: 800;
   letter-spacing: 0.3px;
   color: rgba(255, 255, 255, 0.9);
+  min-width: 0;
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .panelHeaderMeta {
@@ -506,6 +512,7 @@ input {
   font-size: 18px;
   font-weight: 800;
   color: rgba(255, 255, 255, 0.9);
+  flex: 0 0 auto;
 }
 
 .panelHeaderBtn::after {

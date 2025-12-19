@@ -562,7 +562,9 @@ export default function App() {
                     setCategoryOpen((s) => ({ ...s, [type]: !s[type] }));
                   }}
                 >
-                  <span className="panelHeaderTitle">{name}</span>
+                  <span className="panelHeaderTitle" title={name}>
+                    {name}
+                  </span>
                   <span className="panelHeaderMeta">{countdown}</span>
                 </button>
                 <div className="panelHeaderRight">
