@@ -98,6 +98,30 @@ function clampInt(n: number, min: number, max: number): number {
 
 const types: ScheduleType[] = ["helltide", "legion", "world_boss"];
 
+function SwitchButton(props: {
+  checked: boolean;
+  disabled?: boolean;
+  label: string;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  const { checked, disabled, label, onCheckedChange } = props;
+  return (
+    <button
+      className={`switchBtn ${checked ? "on" : "off"}`}
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onCheckedChange(!checked)}
+    >
+      <span className="switchTrack" aria-hidden="true">
+        <span className="switchThumb" />
+      </span>
+      <span className="switchLabel">{label}</span>
+    </button>
+  );
+}
+
 export default function App() {
   const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -385,20 +409,12 @@ export default function App() {
               <button className="btn" onClick={() => void refresh()} disabled={loading}>
                 {loading ? "Lade…" : "Refresh"}
               </button>
-              <label className="switch">
-                <span className="switchControl">
-                  <input
-                    type="checkbox"
-                    disabled={panicStopEnabled}
-                    checked={settings.autoRefreshEnabled}
-                    onChange={(e) => setSettings((s) => ({ ...s, autoRefreshEnabled: e.target.checked }))}
-                  />
-                  <span className="switchTrack">
-                    <span className="switchThumb" />
-                  </span>
-                </span>
-                <span className="switchLabel">Auto</span>
-              </label>
+              <SwitchButton
+                label="Auto"
+                disabled={panicStopEnabled}
+                checked={settings.autoRefreshEnabled}
+                onCheckedChange={(checked) => setSettings((s) => ({ ...s, autoRefreshEnabled: checked }))}
+              />
               <button className="btn primary" type="button" onClick={() => void openExternalUrl("https://helltides.com")}>
                 Quelle
               </button>
@@ -442,59 +458,40 @@ export default function App() {
               </div>
             </div>
             <div className={`section ${notificationsOpen ? "open" : ""}`}>
-              <div
-                className="sectionHeader"
-                role="button"
-                tabIndex={0}
-                aria-expanded={notificationsOpen}
-                onClick={() => setNotificationsOpen((v) => !v)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setNotificationsOpen((v) => !v);
-                  }
-                }}
-              >
-                <div className="sectionTitle">Benachrichtigungen</div>
-                <div className="pill small">Overlay + Ton</div>
+              <div className="panelHeaderRow">
+                <button
+                  className="panelHeaderBtn"
+                  type="button"
+                  aria-expanded={notificationsOpen}
+                  onClick={() => setNotificationsOpen((v) => !v)}
+                >
+                  <span className="panelHeaderTitle">Benachrichtigungen</span>
+                </button>
+                <div className="panelHeaderRight">
+                  <div className="pill small">Overlay + Ton</div>
+                </div>
               </div>
               {notificationsOpen ? (
                 <div className="sectionBody">
-                <div className="inline">
-                  <div className="hint">Overlay Toast (Topmost)</div>
-                  <label className="switch">
-                    <span className="switchControl">
-                      <input
-                        type="checkbox"
-                        disabled={panicStopEnabled}
-                        checked={settings.overlayToastsEnabled}
-                        onChange={(e) => setSettings((s) => ({ ...s, overlayToastsEnabled: e.target.checked }))}
-                      />
-                      <span className="switchTrack">
-                        <span className="switchThumb" />
-                      </span>
-                    </span>
-                    <span className="switchLabel">{settings.overlayToastsEnabled ? "an" : "aus"}</span>
-                  </label>
-                </div>
+                  <div className="inline">
+                    <div className="hint">Overlay Toast (Topmost)</div>
+                    <SwitchButton
+                      label={settings.overlayToastsEnabled ? "an" : "aus"}
+                      disabled={panicStopEnabled}
+                      checked={settings.overlayToastsEnabled}
+                      onCheckedChange={(checked) => setSettings((s) => ({ ...s, overlayToastsEnabled: checked }))}
+                    />
+                  </div>
 
-                <div className="inline">
-                  <div className="hint">Ton</div>
-                  <label className="switch">
-                    <span className="switchControl">
-                      <input
-                        type="checkbox"
-                        disabled={panicStopEnabled}
-                        checked={settings.soundEnabled}
-                        onChange={(e) => setSettings((s) => ({ ...s, soundEnabled: e.target.checked }))}
-                      />
-                      <span className="switchTrack">
-                        <span className="switchThumb" />
-                      </span>
-                    </span>
-                    <span className="switchLabel">{settings.soundEnabled ? "an" : "aus"}</span>
-                  </label>
-                </div>
+                  <div className="inline">
+                    <div className="hint">Ton</div>
+                    <SwitchButton
+                      label={settings.soundEnabled ? "an" : "aus"}
+                      disabled={panicStopEnabled}
+                      checked={settings.soundEnabled}
+                      onCheckedChange={(checked) => setSettings((s) => ({ ...s, soundEnabled: checked }))}
+                    />
+                  </div>
 
                 <div className="inline">
                   <div className="hint">Overlay Hintergrund</div>
@@ -566,48 +563,27 @@ export default function App() {
 
           return (
             <div className={`card span12 categoryCard ${type} categoryDetails ${isOpen ? "open" : ""}`} key={type}>
-              <div
-                className="categorySummary"
-                role="button"
-                tabIndex={0}
-                aria-expanded={isOpen}
-                onClick={() => {
-                  if (!category.enabled) return;
-                  setCategoryOpen((s) => ({ ...s, [type]: !s[type] }));
-                }}
-                onKeyDown={(e) => {
-                  if (!category.enabled) return;
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
+              <div className="panelHeaderRow categoryHeader">
+                <button
+                  className="panelHeaderBtn categoryExpandBtn"
+                  type="button"
+                  disabled={!category.enabled}
+                  aria-expanded={isOpen}
+                  onClick={() => {
+                    if (!category.enabled) return;
                     setCategoryOpen((s) => ({ ...s, [type]: !s[type] }));
-                  }
-                }}
-              >
-                <div className="row">
-                  <div className="kpi">
-                    <div className="label">{name}</div>
-                    <div className="value" style={{ fontSize: 18 }}>
-                      {countdown}
-                    </div>
-                  </div>
-                  <div className="categoryRight">
-                    <div className="pill">{timeLabel}</div>
-                    <label className="switch" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-                      <span className="switchControl">
-                        <input
-                          type="checkbox"
-                          checked={category.enabled}
-                          onChange={(e) => setCategoryEnabled(type, e.target.checked)}
-                          onClick={(e) => e.stopPropagation()}
-                          onPointerDown={(e) => e.stopPropagation()}
-                        />
-                        <span className="switchTrack">
-                          <span className="switchThumb" />
-                        </span>
-                      </span>
-                      <span className="switchLabel">Erinnern</span>
-                    </label>
-                  </div>
+                  }}
+                >
+                  <span className="panelHeaderTitle">{name}</span>
+                  <span className="panelHeaderMeta">{countdown}</span>
+                </button>
+                <div className="panelHeaderRight">
+                  <div className="pill">{timeLabel}</div>
+                  <SwitchButton
+                    label="Erinnern"
+                    checked={category.enabled}
+                    onCheckedChange={(checked) => setCategoryEnabled(type, checked)}
+                  />
                 </div>
               </div>
 
