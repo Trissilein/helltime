@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dist-ssr/
+.DS_Store
+
+# Tauri / Rust
+src-tauri/target/
+
+# IDE
+.idea/
+.vscode/
+
+# Misc
+*.url
