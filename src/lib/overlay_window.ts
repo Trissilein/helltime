@@ -1,4 +1,6 @@
 import { isTauri } from "@tauri-apps/api/core";
+import type { Settings } from "./settings";
+import type { ScheduleType } from "./types";
 
 export const OVERLAY_WINDOW_LABEL = "overlay";
 
@@ -68,3 +70,33 @@ export async function setOverlayWindowVisible(visible: boolean): Promise<void> {
   }
 }
 
+export type OverlayWindowSettings = {
+  enabled: boolean;
+  mode: "overview" | "toast";
+  categories: Record<ScheduleType, boolean>;
+  bgHex: string;
+  bgOpacity: number;
+  scale: number;
+};
+
+export function toOverlayWindowSettings(settings: Settings): OverlayWindowSettings {
+  return {
+    enabled: settings.overlayWindowEnabled,
+    mode: settings.overlayWindowMode,
+    categories: settings.overlayWindowCategories,
+    bgHex: settings.overlayBgHex,
+    bgOpacity: settings.overlayBgOpacity,
+    scale: settings.overlayScale
+  };
+}
+
+export async function broadcastOverlayWindowSettings(settings: Settings): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    const { emitTo } = await import("@tauri-apps/api/event");
+    await emitTo(OVERLAY_WINDOW_LABEL, "helltime:overlay-settings", toOverlayWindowSettings(settings));
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn("broadcastOverlayWindowSettings failed", e);
+  }
+}

@@ -69,7 +69,6 @@ export default function OverlayWindow() {
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [lastRefreshAt, setLastRefreshAt] = useState<number | null>(null);
-  const [settingsVersion, setSettingsVersion] = useState(0);
   const [settings, setSettings] = useState(() => loadSettings());
   const [toast, setToast] = useState<{ payload: ToastPayload; shownAt: number } | null>(null);
 
@@ -84,20 +83,7 @@ export default function OverlayWindow() {
   }, []);
 
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "settings_v6" || e.key === "settings_v7") setSettingsVersion((v) => v + 1);
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  useEffect(() => {
     setSettings(loadSettings());
-  }, [settingsVersion]);
-
-  useEffect(() => {
-    const id = window.setInterval(() => setSettings(loadSettings()), 750);
-    return () => window.clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -134,6 +120,40 @@ export default function OverlayWindow() {
       } catch (e) {
         // eslint-disable-next-line no-console
         console.warn("overlay: listen helltime:toast failed", e);
+      }
+    })();
+
+    return () => {
+      try {
+        unlisten?.();
+      } catch {
+        // ignore
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let unlisten: (() => void) | null = null;
+    void (async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        unlisten = await listen<any>("helltime:overlay-settings", (event) => {
+          const p = event.payload as any;
+          if (!p || typeof p !== "object") return;
+          setSettings((s) => ({
+            ...s,
+            overlayWindowEnabled: typeof p.enabled === "boolean" ? p.enabled : s.overlayWindowEnabled,
+            overlayWindowMode: p.mode === "toast" ? "toast" : "overview",
+            overlayWindowCategories: typeof p.categories === "object" && p.categories ? p.categories : s.overlayWindowCategories,
+            overlayBgHex: typeof p.bgHex === "string" ? p.bgHex : s.overlayBgHex,
+            overlayBgOpacity: typeof p.bgOpacity === "number" ? p.bgOpacity : s.overlayBgOpacity,
+            overlayScale: typeof p.scale === "number" ? p.scale : s.overlayScale
+          }));
+        });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn("overlay: listen helltime:overlay-settings failed", e);
       }
     })();
 

@@ -7,7 +7,7 @@ import { formatRemainingSpeech, speak } from "./lib/speech";
 import type { ScheduleResponse, ScheduleType, WorldBossScheduleItem } from "./lib/types";
 import { openExternalUrl } from "./lib/external";
 import { disablePanicStop, isPanicStopEnabled } from "./lib/safety";
-import { ensureOverlayWindow, OVERLAY_WINDOW_LABEL, setOverlayWindowVisible } from "./lib/overlay_window";
+import { broadcastOverlayWindowSettings, ensureOverlayWindow, OVERLAY_WINDOW_LABEL, setOverlayWindowVisible } from "./lib/overlay_window";
 
 type FiredMap = Record<string, number>;
 
@@ -116,6 +116,17 @@ export default function App() {
 
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const firedRef = useRef<FiredMap>(loadFired());
+  const lastSettingsRef = useRef<Settings>(settings);
+
+  function updateSettings(updater: (prev: Settings) => Settings): void {
+    setSettings((prev) => {
+      const next = updater(prev);
+      lastSettingsRef.current = next;
+      saveSettings(next);
+      queueMicrotask(() => void broadcastOverlayWindowSettings(next));
+      return next;
+    });
+  }
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
@@ -132,7 +143,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    saveSettings(settings);
+    lastSettingsRef.current = settings;
   }, [settings]);
 
   useEffect(() => {
@@ -342,7 +353,7 @@ export default function App() {
     }
 
     if (!enabled) setCategoryOpen((s) => ({ ...s, [type]: false }));
-    setSettings((s) => ({
+    updateSettings((s) => ({
       ...s,
       categories: {
         ...s.categories,
@@ -352,7 +363,7 @@ export default function App() {
   }
 
   function setTimerCount(type: ScheduleType, timerCount: 1 | 2 | 3) {
-    setSettings((s) => ({
+    updateSettings((s) => ({
       ...s,
       categories: {
         ...s.categories,
@@ -362,7 +373,7 @@ export default function App() {
   }
 
   function updateTimer(type: ScheduleType, index: number, patch: Partial<TimerSettings>) {
-    setSettings((s) => {
+    updateSettings((s) => {
       const category = s.categories[type];
       const timers: Settings["categories"][ScheduleType]["timers"] = [category.timers[0], category.timers[1], category.timers[2]];
       timers[index] = { ...timers[index], ...patch };
@@ -440,7 +451,7 @@ export default function App() {
                   type="checkbox"
                   disabled={panicStopEnabled}
                   checked={settings.autoRefreshEnabled}
-                  onChange={(e) => setSettings((s) => ({ ...s, autoRefreshEnabled: e.target.checked }))}
+                  onChange={(e) => updateSettings((s) => ({ ...s, autoRefreshEnabled: e.target.checked }))}
                 />
                 <span className="toggleLabel">Auto</span>
               </label>
@@ -451,11 +462,7 @@ export default function App() {
                   checked={settings.overlayWindowEnabled}
                   onChange={(e) => {
                     const checked = e.target.checked;
-                    setSettings((s) => {
-                      const next = { ...s, overlayWindowEnabled: checked };
-                      saveSettings(next);
-                      return next;
-                    });
+                    updateSettings((s) => ({ ...s, overlayWindowEnabled: checked }));
                   }}
                 />
                 <span className="toggleLabel">Overlay</span>
@@ -532,11 +539,7 @@ export default function App() {
                         checked={settings.overlayWindowEnabled}
                         onChange={(e) => {
                           const checked = e.target.checked;
-                          setSettings((s) => {
-                            const next = { ...s, overlayWindowEnabled: checked };
-                            saveSettings(next);
-                            return next;
-                          });
+                          updateSettings((s) => ({ ...s, overlayWindowEnabled: checked }));
                         }}
                       />
                       <span className="toggleLabel">{settings.overlayWindowEnabled ? "an" : "aus"}</span>
@@ -554,13 +557,7 @@ export default function App() {
                           name="overlayMode"
                           disabled={panicStopEnabled || !settings.overlayWindowEnabled}
                           checked={settings.overlayWindowMode === "overview"}
-                          onChange={() =>
-                            setSettings((s) => {
-                              const next = { ...s, overlayWindowMode: "overview" };
-                              saveSettings(next);
-                              return next;
-                            })
-                          }
+                          onChange={() => updateSettings((s) => ({ ...s, overlayWindowMode: "overview" }))}
                         />
                         <span className="toggleLabel">Overview</span>
                       </label>
@@ -570,13 +567,7 @@ export default function App() {
                           name="overlayMode"
                           disabled={panicStopEnabled || !settings.overlayWindowEnabled}
                           checked={settings.overlayWindowMode === "toast"}
-                          onChange={() =>
-                            setSettings((s) => {
-                              const next = { ...s, overlayWindowMode: "toast" };
-                              saveSettings(next);
-                              return next;
-                            })
-                          }
+                          onChange={() => updateSettings((s) => ({ ...s, overlayWindowMode: "toast" }))}
                         />
                         <span className="toggleLabel">Toast</span>
                       </label>
@@ -589,14 +580,10 @@ export default function App() {
                           checked={settings.overlayWindowCategories.legion}
                           onChange={(e) => {
                             const checked = e.target.checked;
-                            setSettings((s) => {
-                              const next = {
-                                ...s,
-                                overlayWindowCategories: { ...s.overlayWindowCategories, legion: checked }
-                              };
-                              saveSettings(next);
-                              return next;
-                            });
+                            updateSettings((s) => ({
+                              ...s,
+                              overlayWindowCategories: { ...s.overlayWindowCategories, legion: checked }
+                            }));
                           }}
                         />
                         <span className="toggleLabel">Legion</span>
@@ -608,14 +595,10 @@ export default function App() {
                           checked={settings.overlayWindowCategories.helltide}
                           onChange={(e) => {
                             const checked = e.target.checked;
-                            setSettings((s) => {
-                              const next = {
-                                ...s,
-                                overlayWindowCategories: { ...s.overlayWindowCategories, helltide: checked }
-                              };
-                              saveSettings(next);
-                              return next;
-                            });
+                            updateSettings((s) => ({
+                              ...s,
+                              overlayWindowCategories: { ...s.overlayWindowCategories, helltide: checked }
+                            }));
                           }}
                         />
                         <span className="toggleLabel">Helltide</span>
@@ -627,14 +610,10 @@ export default function App() {
                           checked={settings.overlayWindowCategories.world_boss}
                           onChange={(e) => {
                             const checked = e.target.checked;
-                            setSettings((s) => {
-                              const next = {
-                                ...s,
-                                overlayWindowCategories: { ...s.overlayWindowCategories, world_boss: checked }
-                              };
-                              saveSettings(next);
-                              return next;
-                            });
+                            updateSettings((s) => ({
+                              ...s,
+                              overlayWindowCategories: { ...s.overlayWindowCategories, world_boss: checked }
+                            }));
                           }}
                         />
                         <span className="toggleLabel">World Boss</span>
@@ -649,7 +628,7 @@ export default function App() {
                         type="checkbox"
                         disabled={panicStopEnabled}
                         checked={settings.soundEnabled}
-                        onChange={(e) => setSettings((s) => ({ ...s, soundEnabled: e.target.checked }))}
+                        onChange={(e) => updateSettings((s) => ({ ...s, soundEnabled: e.target.checked }))}
                       />
                       <span className="toggleLabel">{settings.soundEnabled ? "an" : "aus"}</span>
                     </label>
@@ -661,7 +640,7 @@ export default function App() {
                       <input
                         type="color"
                         value={settings.overlayBgHex}
-                        onChange={(e) => setSettings((s) => ({ ...s, overlayBgHex: e.target.value }))}
+                        onChange={(e) => updateSettings((s) => ({ ...s, overlayBgHex: e.target.value }))}
                         title="Overlay Hintergrund"
                       />
                       <div className="pill">{settings.overlayBgHex}</div>
@@ -687,7 +666,7 @@ export default function App() {
                     step={5}
                     value={Math.round(settings.overlayScale * 100)}
                     onChange={(e) =>
-                      setSettings((s) => ({
+                      updateSettings((s) => ({
                         ...s,
                         overlayScale: clampInt(Number(e.target.value), 60, 200) / 100
                       }))
@@ -705,7 +684,7 @@ export default function App() {
                     step={5}
                     value={Math.round(settings.overlayBgOpacity * 100)}
                     onChange={(e) =>
-                      setSettings((s) => ({
+                      updateSettings((s) => ({
                         ...s,
                         overlayBgOpacity: clampInt(Number(e.target.value), 20, 100) / 100
                       }))
@@ -723,7 +702,7 @@ export default function App() {
                     step={1}
                     disabled={!settings.soundEnabled}
                     value={Math.round(settings.volume * 100)}
-                    onChange={(e) => setSettings((s) => ({ ...s, volume: clampInt(Number(e.target.value), 0, 100) / 100 }))}
+                    onChange={(e) => updateSettings((s) => ({ ...s, volume: clampInt(Number(e.target.value), 0, 100) / 100 }))}
                     onPointerUp={(e) => testVolumeBeep(clampInt(Number(e.currentTarget.value), 0, 100) / 100)}
                     onKeyUp={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
