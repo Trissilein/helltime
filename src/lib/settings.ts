@@ -26,6 +26,9 @@ export type Settings = {
   overlayToastsEnabled: boolean;
   overviewOverlayEnabled: boolean;
   overviewOverlayCategories: Record<ScheduleType, boolean>;
+  overlayWindowEnabled: boolean;
+  overlayWindowMode: "overview" | "toast";
+  overlayWindowCategories: Record<ScheduleType, boolean>;
   overlayToastsPosition: { x: number; y: number } | null;
   overlayBgHex: string; // "#rrggbb"
   overlayScale: number; // 0.6-2.0
@@ -60,6 +63,13 @@ const defaults: Settings = {
   overlayToastsEnabled: false,
   overviewOverlayEnabled: true,
   overviewOverlayCategories: {
+    helltide: true,
+    legion: true,
+    world_boss: true
+  },
+  overlayWindowEnabled: false,
+  overlayWindowMode: "overview",
+  overlayWindowCategories: {
     helltide: true,
     legion: true,
     world_boss: true
@@ -164,6 +174,7 @@ export function loadSettings(): Settings {
     const raw = v4 as any;
     const rawCategories = raw.categories ?? {};
     const rawOverviewCats = raw.overviewOverlayCategories ?? {};
+    const rawOverlayCats = raw.overlayWindowCategories ?? {};
 
     const base: Settings = {
       version: 6,
@@ -193,6 +204,19 @@ export function loadSettings(): Settings {
             ? rawOverviewCats.world_boss
             : defaults.overviewOverlayCategories.world_boss
       },
+      overlayWindowEnabled:
+        typeof raw.overlayWindowEnabled === "boolean" ? raw.overlayWindowEnabled : defaults.overlayWindowEnabled,
+      overlayWindowMode: raw.overlayWindowMode === "toast" ? "toast" : "overview",
+      overlayWindowCategories: {
+        helltide:
+          typeof rawOverlayCats.helltide === "boolean" ? rawOverlayCats.helltide : defaults.overlayWindowCategories.helltide,
+        legion:
+          typeof rawOverlayCats.legion === "boolean" ? rawOverlayCats.legion : defaults.overlayWindowCategories.legion,
+        world_boss:
+          typeof rawOverlayCats.world_boss === "boolean"
+            ? rawOverlayCats.world_boss
+            : defaults.overlayWindowCategories.world_boss
+      },
       overlayToastsPosition: normalizePosition(raw.overlayToastsPosition),
       overlayBgHex: normalizeHexColor(raw.overlayBgHex, defaults.overlayBgHex),
       overlayScale: clampFloat(raw.overlayScale, defaults.overlayScale, 0.6, 2.0),
@@ -221,6 +245,9 @@ export function loadSettings(): Settings {
       overlayToastsEnabled: typeof v4raw.overlayToastsEnabled === "boolean" ? v4raw.overlayToastsEnabled : defaults.overlayToastsEnabled,
       overviewOverlayEnabled: defaults.overviewOverlayEnabled,
       overviewOverlayCategories: defaults.overviewOverlayCategories,
+      overlayWindowEnabled: defaults.overlayWindowEnabled,
+      overlayWindowMode: defaults.overlayWindowMode,
+      overlayWindowCategories: defaults.overlayWindowCategories,
       overlayToastsPosition: normalizePosition(v4raw.overlayToastsPosition),
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
@@ -248,6 +275,9 @@ export function loadSettings(): Settings {
       overlayToastsEnabled: defaults.overlayToastsEnabled,
       overviewOverlayEnabled: defaults.overviewOverlayEnabled,
       overviewOverlayCategories: defaults.overviewOverlayCategories,
+      overlayWindowEnabled: defaults.overlayWindowEnabled,
+      overlayWindowMode: defaults.overlayWindowMode,
+      overlayWindowCategories: defaults.overlayWindowCategories,
       overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
@@ -279,6 +309,9 @@ export function loadSettings(): Settings {
       overlayToastsEnabled: defaults.overlayToastsEnabled,
       overviewOverlayEnabled: defaults.overviewOverlayEnabled,
       overviewOverlayCategories: defaults.overviewOverlayCategories,
+      overlayWindowEnabled: defaults.overlayWindowEnabled,
+      overlayWindowMode: defaults.overlayWindowMode,
+      overlayWindowCategories: defaults.overlayWindowCategories,
       overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
@@ -315,6 +348,9 @@ export function loadSettings(): Settings {
       overlayToastsEnabled: defaults.overlayToastsEnabled,
       overviewOverlayEnabled: defaults.overviewOverlayEnabled,
       overviewOverlayCategories: defaults.overviewOverlayCategories,
+      overlayWindowEnabled: defaults.overlayWindowEnabled,
+      overlayWindowMode: defaults.overlayWindowMode,
+      overlayWindowCategories: defaults.overlayWindowCategories,
       overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
