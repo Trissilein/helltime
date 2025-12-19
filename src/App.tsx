@@ -8,7 +8,7 @@ import type { ScheduleResponse, ScheduleType, WorldBossScheduleItem } from "./li
 import { overlayEnterConfig, overlayExitConfig, overlayGetPosition, overlayShow } from "./lib/overlay";
 import { openExternalUrl } from "./lib/external";
 import { disablePanicStop, isPanicStopEnabled } from "./lib/safety";
-import { setOverviewOverlayEnabled } from "./lib/overview_window";
+import { resetOverviewOverlayWindow, setOverviewOverlayEnabled } from "./lib/overview_window";
 
 type FiredMap = Record<string, number>;
 
@@ -413,10 +413,20 @@ export default function App() {
   async function saveOverlayPosition(): Promise<void> {
     await overlayExitConfig();
     // give the native window thread time to persist the last dragged position
-    await new Promise((r) => window.setTimeout(r, 120));
-    const pos = await overlayGetPosition();
+    const prev = settings.overlayToastsPosition;
+    let pos: Awaited<ReturnType<typeof overlayGetPosition>> = null;
+    for (let i = 0; i < 6; i++) {
+      await new Promise((r) => window.setTimeout(r, 90));
+      pos = await overlayGetPosition();
+      if (!pos) continue;
+      if (!prev || pos.x !== prev.x || pos.y !== prev.y) break;
+    }
     if (!pos) return;
-    setSettings((s) => ({ ...s, overlayToastsEnabled: true, overlayToastsPosition: pos }));
+    setSettings((s) => {
+      const next = { ...s, overlayToastsEnabled: true, overlayToastsPosition: pos };
+      saveSettings(next);
+      return next;
+    });
     setOverlaySavedAt(Date.now());
   }
 
@@ -425,6 +435,14 @@ export default function App() {
     if (!settings.soundEnabled) return;
     const sampleTimer = settings.categories.helltide.timers[0];
     playBeep(sampleTimer.beepPattern, sampleTimer.pitchHz, typeof volumeOverride === "number" ? volumeOverride : settings.volume);
+  }
+
+  function previewOverlayToast(): void {
+    if (panicStopEnabled) return;
+    if (!settings.overlayToastsEnabled) return;
+    const title = "Overlay Vorschau";
+    const body = `Skalierung ${Math.round(settings.overlayScale * 100)}% • ${settings.overlayBgHex}`;
+    void showOverlayToast({ title, body, type: "helltide", kind: "debug" });
   }
 
   return (
@@ -607,6 +625,11 @@ export default function App() {
                         <span className="toggleLabel">World Boss</span>
                       </label>
                     </div>
+                    <div className="actions" style={{ marginTop: 8 }}>
+                      <button className="btn" type="button" disabled={panicStopEnabled} onClick={() => void resetOverviewOverlayWindow()}>
+                        Übersicht zentrieren
+                      </button>
+                    </div>
                   </div>
 
                   <div className="inline">
@@ -637,6 +660,9 @@ export default function App() {
                     </button>
                 <button className="btn" type="button" onClick={() => void saveOverlayPosition()}>
                   Speichern
+                </button>
+                <button className="btn" type="button" disabled={panicStopEnabled || !settings.overlayToastsEnabled} onClick={() => previewOverlayToast()}>
+                  Vorschau
                 </button>
               </div>
             </div>

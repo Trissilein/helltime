@@ -58,7 +58,7 @@ const defaults: Settings = {
   soundEnabled: true,
   autoRefreshEnabled: false,
   overlayToastsEnabled: false,
-  overviewOverlayEnabled: false,
+  overviewOverlayEnabled: true,
   overviewOverlayCategories: {
     helltide: true,
     legion: true,

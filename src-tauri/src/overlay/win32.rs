@@ -406,6 +406,9 @@ unsafe fn apply_position(hwnd: HWND, shared: &Shared) {
   let h = ((BASE_H as f32) * scale).round() as i32;
   if let Some(p) = pos {
     let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), p.x, p.y, w, h, SWP_NOACTIVATE);
+  } else {
+    // still apply size (so scaling works) even if we haven't stored a position yet
+    let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, w, h, SWP_NOACTIVATE | SWP_NOMOVE);
   }
 }
 
