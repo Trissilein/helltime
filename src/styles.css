@@ -30,6 +30,8 @@ body {
     radial-gradient(1000px 500px at 90% 0%, rgba(59, 130, 246, 0.18), transparent 60%),
     var(--bg);
   background-repeat: no-repeat;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
   color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
 }
@@ -141,6 +143,13 @@ input {
   background: rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.85);
   font-size: 12px;
+}
+
+.pillClamp {
+  max-width: min(520px, 60vw);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .actions {

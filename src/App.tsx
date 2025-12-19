@@ -430,9 +430,14 @@ export default function App() {
             ) : null}
             <div className="inline">
               <div className="hint">Nächstes Event (aktivierte Kategorien)</div>
-              <div className="pill">
-                {nextEnabledOverall ? `${nextEnabledOverall.name} • ${formatLocalTime(nextEnabledOverall.startTime)}` : "—"}
-              </div>
+              {(() => {
+                const label = nextEnabledOverall ? `${nextEnabledOverall.name} • ${formatLocalTime(nextEnabledOverall.startTime)}` : "—";
+                return (
+                  <div className="pill pillClamp" title={label}>
+                    {label}
+                  </div>
+                );
+              })()}
             </div>
             <div className={`section ${notificationsOpen ? "open" : ""}`}>
               <div className="panelHeaderRow">
