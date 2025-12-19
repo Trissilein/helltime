@@ -429,6 +429,7 @@ unsafe fn paint(hwnd: HWND) {
     return;
   }
   let ctx = ctx.unwrap();
+  let scale = current_scale(&ctx.shared);
 
   // fonts (recreate each paint so scaling always applies)
   if let Some(f) = ctx.font_title.take() {
@@ -487,7 +488,6 @@ unsafe fn paint(hwnd: HWND) {
   };
 
   let toast = ctx.shared.toast.lock().ok().and_then(|t| t.clone());
-  let scale = current_scale(&ctx.shared);
   let bg_rgb = toast.as_ref().and_then(|t| t.bg_rgb).unwrap_or(0x0b1220);
   let (bg_r, bg_g, bg_b) = (
     ((bg_rgb >> 16) & 0xff) as u8,
@@ -556,7 +556,7 @@ unsafe fn draw_text_outlined(
   rect: &mut RECT,
   color: COLORREF,
   outline: COLORREF,
-  format: u32,
+  format: windows::Win32::Graphics::Gdi::DRAW_TEXT_FORMAT,
 ) {
   let mut buf: Vec<u16> = text.encode_utf16().collect();
 
