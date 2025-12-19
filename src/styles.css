@@ -431,6 +431,7 @@ input {
 .toggle input {
   width: 16px;
   height: 16px;
+  accent-color: var(--accent);
 }
 
 .toggleLabel {
@@ -438,63 +439,13 @@ input {
 }
 
 .panelHeaderBtn:focus-visible,
-.switchBtn:focus-visible {
+.toggle input:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.35);
   outline-offset: 2px;
 }
 
-.switchBtn {
-  appearance: none;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 12px;
-  color: var(--muted);
-  user-select: none;
-  cursor: pointer;
-}
-
-.switchBtn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.switchTrack {
-  width: 42px;
-  height: 22px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.06);
-  position: relative;
-  flex: 0 0 auto;
-}
-
-.switchThumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.88);
-  position: absolute;
-  top: 1px;
-  left: 1px;
-  transition: transform 140ms ease, background 140ms ease;
-}
-
-.switchBtn.on .switchTrack {
-  border-color: rgba(255, 77, 77, 0.6);
-  background: rgba(255, 77, 77, 0.22);
-}
-
-.switchBtn.on .switchThumb {
-  transform: translateX(20px);
-  background: rgba(255, 255, 255, 0.92);
-}
-
-.switchLabel {
-  white-space: nowrap;
+.categoryDetails .toggle input {
+  accent-color: var(--cat);
 }
 
 .panelHeaderRow {

@@ -98,30 +98,6 @@ function clampInt(n: number, min: number, max: number): number {
 
 const types: ScheduleType[] = ["helltide", "legion", "world_boss"];
 
-function SwitchButton(props: {
-  checked: boolean;
-  disabled?: boolean;
-  label: string;
-  onCheckedChange: (checked: boolean) => void;
-}) {
-  const { checked, disabled, label, onCheckedChange } = props;
-  return (
-    <button
-      className={`switchBtn ${checked ? "on" : "off"}`}
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={() => onCheckedChange(!checked)}
-    >
-      <span className="switchTrack" aria-hidden="true">
-        <span className="switchThumb" />
-      </span>
-      <span className="switchLabel">{label}</span>
-    </button>
-  );
-}
-
 export default function App() {
   const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -409,12 +385,15 @@ export default function App() {
               <button className="btn" onClick={() => void refresh()} disabled={loading}>
                 {loading ? "Lade…" : "Refresh"}
               </button>
-              <SwitchButton
-                label="Auto"
-                disabled={panicStopEnabled}
-                checked={settings.autoRefreshEnabled}
-                onCheckedChange={(checked) => setSettings((s) => ({ ...s, autoRefreshEnabled: checked }))}
-              />
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  disabled={panicStopEnabled}
+                  checked={settings.autoRefreshEnabled}
+                  onChange={(e) => setSettings((s) => ({ ...s, autoRefreshEnabled: e.target.checked }))}
+                />
+                <span className="toggleLabel">Auto</span>
+              </label>
               <button className="btn primary" type="button" onClick={() => void openExternalUrl("https://helltides.com")}>
                 Quelle
               </button>
@@ -475,22 +454,28 @@ export default function App() {
                 <div className="sectionBody">
                   <div className="inline">
                     <div className="hint">Overlay Toast (Topmost)</div>
-                    <SwitchButton
-                      label={settings.overlayToastsEnabled ? "an" : "aus"}
-                      disabled={panicStopEnabled}
-                      checked={settings.overlayToastsEnabled}
-                      onCheckedChange={(checked) => setSettings((s) => ({ ...s, overlayToastsEnabled: checked }))}
-                    />
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        disabled={panicStopEnabled}
+                        checked={settings.overlayToastsEnabled}
+                        onChange={(e) => setSettings((s) => ({ ...s, overlayToastsEnabled: e.target.checked }))}
+                      />
+                      <span className="toggleLabel">{settings.overlayToastsEnabled ? "an" : "aus"}</span>
+                    </label>
                   </div>
 
                   <div className="inline">
                     <div className="hint">Ton</div>
-                    <SwitchButton
-                      label={settings.soundEnabled ? "an" : "aus"}
-                      disabled={panicStopEnabled}
-                      checked={settings.soundEnabled}
-                      onCheckedChange={(checked) => setSettings((s) => ({ ...s, soundEnabled: checked }))}
-                    />
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        disabled={panicStopEnabled}
+                        checked={settings.soundEnabled}
+                        onChange={(e) => setSettings((s) => ({ ...s, soundEnabled: e.target.checked }))}
+                      />
+                      <span className="toggleLabel">{settings.soundEnabled ? "an" : "aus"}</span>
+                    </label>
                   </div>
 
                 <div className="inline">
@@ -579,11 +564,14 @@ export default function App() {
                 </button>
                 <div className="panelHeaderRight">
                   <div className="pill">{timeLabel}</div>
-                  <SwitchButton
-                    label="Erinnern"
-                    checked={category.enabled}
-                    onCheckedChange={(checked) => setCategoryEnabled(type, checked)}
-                  />
+                  <label className="toggle">
+                    <input
+                      type="checkbox"
+                      checked={category.enabled}
+                      onChange={(e) => setCategoryEnabled(type, e.target.checked)}
+                    />
+                    <span className="toggleLabel">Erinnern</span>
+                  </label>
                 </div>
               </div>
 
