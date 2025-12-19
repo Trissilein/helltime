@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use windows::core::{w, PCWSTR};
-use windows::Win32::Foundation::{BOOL, COLORREF, HWND, HWND_TOPMOST, LPARAM, LRESULT, RECT, WPARAM};
+use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
   BeginPaint, CreateFontW, CreateSolidBrush, DeleteObject, DrawTextW, EndPaint, FillRect, GetDeviceCaps, InvalidateRect,
   SelectObject, SetBkMode, SetTextColor, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_TOP, HDC, HGDIOBJ, HFONT, PAINTSTRUCT,
@@ -21,7 +21,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
   SetWindowPos, ShowWindow, TranslateMessage, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, GWL_EXSTYLE, GWLP_USERDATA, HMENU,
   HTCAPTION, IDC_ARROW, LWA_ALPHA, MSG, SW_HIDE, SW_SHOWNOACTIVATE, WM_APP, WM_CLOSE, WM_DESTROY, WM_ERASEBKGND,
   WM_LBUTTONDOWN, WM_MOVE, WM_NCCREATE, WM_PAINT, WM_TIMER, WNDCLASSW, WS_CLIPSIBLINGS, WS_EX_LAYERED, WS_EX_NOACTIVATE,
-  WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+  WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
 };
 
 const WM_OVERLAY_SHOW: u32 = WM_APP + 41;
@@ -77,9 +77,8 @@ impl OverlayManager {
     }
     let hwnd = self.ensure_window()?;
     unsafe {
-      if !PostMessageW(hwnd, WM_OVERLAY_SHOW, WPARAM(0), LPARAM(0)).as_bool() {
-        return Err("PostMessageW(WM_OVERLAY_SHOW) failed".into());
-      }
+      PostMessageW(Some(hwnd), WM_OVERLAY_SHOW, WPARAM(0), LPARAM(0))
+        .map_err(|e| format!("PostMessageW(WM_OVERLAY_SHOW): {e:?}"))?;
     }
     Ok(())
   }
@@ -87,9 +86,8 @@ impl OverlayManager {
   pub fn hide(&self) -> Result<(), String> {
     let hwnd = self.ensure_window()?;
     unsafe {
-      if !PostMessageW(hwnd, WM_OVERLAY_HIDE, WPARAM(0), LPARAM(0)).as_bool() {
-        return Err("PostMessageW(WM_OVERLAY_HIDE) failed".into());
-      }
+      PostMessageW(Some(hwnd), WM_OVERLAY_HIDE, WPARAM(0), LPARAM(0))
+        .map_err(|e| format!("PostMessageW(WM_OVERLAY_HIDE): {e:?}"))?;
     }
     Ok(())
   }
@@ -101,9 +99,8 @@ impl OverlayManager {
     *self.shared.config_mode.lock().map_err(|_| "cfg lock poisoned")? = true;
     let hwnd = self.ensure_window()?;
     unsafe {
-      if !PostMessageW(hwnd, WM_OVERLAY_ENTER_CONFIG, WPARAM(0), LPARAM(0)).as_bool() {
-        return Err("PostMessageW(WM_OVERLAY_ENTER_CONFIG) failed".into());
-      }
+      PostMessageW(Some(hwnd), WM_OVERLAY_ENTER_CONFIG, WPARAM(0), LPARAM(0))
+        .map_err(|e| format!("PostMessageW(WM_OVERLAY_ENTER_CONFIG): {e:?}"))?;
     }
     Ok(())
   }
@@ -112,9 +109,8 @@ impl OverlayManager {
     *self.shared.config_mode.lock().map_err(|_| "cfg lock poisoned")? = false;
     let hwnd = self.ensure_window()?;
     unsafe {
-      if !PostMessageW(hwnd, WM_OVERLAY_EXIT_CONFIG, WPARAM(0), LPARAM(0)).as_bool() {
-        return Err("PostMessageW(WM_OVERLAY_EXIT_CONFIG) failed".into());
-      }
+      PostMessageW(Some(hwnd), WM_OVERLAY_EXIT_CONFIG, WPARAM(0), LPARAM(0))
+        .map_err(|e| format!("PostMessageW(WM_OVERLAY_EXIT_CONFIG): {e:?}"))?;
     }
     Ok(())
   }
@@ -127,9 +123,8 @@ impl OverlayManager {
     *self.shared.position.lock().map_err(|_| "pos lock poisoned")? = Some(pos);
     let hwnd = self.ensure_window()?;
     unsafe {
-      if !PostMessageW(hwnd, WM_OVERLAY_SET_POS, WPARAM(0), LPARAM(0)).as_bool() {
-        return Err("PostMessageW(WM_OVERLAY_SET_POS) failed".into());
-      }
+      PostMessageW(Some(hwnd), WM_OVERLAY_SET_POS, WPARAM(0), LPARAM(0))
+        .map_err(|e| format!("PostMessageW(WM_OVERLAY_SET_POS): {e:?}"))?;
     }
     Ok(())
   }
@@ -230,9 +225,9 @@ fn run_overlay_thread(shared: Shared, hwnd_raw: Arc<AtomicIsize>, ready: std::sy
       CW_USEDEFAULT,
       280,
       110,
-      HWND(null_mut()),
-      HMENU(null_mut()),
-      hinstance,
+      None,
+      None,
+      Some(hinstance),
       Some(ctx_ptr as *const c_void),
     )
     .map_err(|e| format!("CreateWindowExW: {e:?}"))?;
@@ -254,7 +249,7 @@ fn run_overlay_thread(shared: Shared, hwnd_raw: Arc<AtomicIsize>, ready: std::sy
     }
 
     let mut msg = MSG::default();
-    while GetMessageW(&mut msg, HWND(null_mut()), 0, 0).into() {
+    while GetMessageW(&mut msg, None, 0, 0).into() {
       TranslateMessage(&msg);
       DispatchMessageW(&msg);
     }
@@ -311,8 +306,8 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
           let _ = SendMessageW(
             hwnd,
             windows::Win32::UI::WindowsAndMessaging::WM_NCLBUTTONDOWN,
-            WPARAM(HTCAPTION as usize),
-            LPARAM(0),
+            Some(WPARAM(HTCAPTION as usize)),
+            Some(LPARAM(0)),
           );
         }
       }
@@ -320,7 +315,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
     }
     WM_TIMER => {
       if wparam.0 == TIMER_HIDE {
-        let _ = KillTimer(hwnd, TIMER_HIDE);
+        let _ = KillTimer(Some(hwnd), TIMER_HIDE);
         set_visible(hwnd, false, get_ctx(hwnd));
       }
       LRESULT(0)
@@ -342,7 +337,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         apply_position(hwnd, &ctx.shared);
         ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         let _ = SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
-        InvalidateRect(hwnd, None, BOOL(0));
+        InvalidateRect(Some(hwnd), None, false.into());
         if let Ok(mut v) = ctx.shared.visible.lock() {
           *v = true;
         }
@@ -356,7 +351,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         ex |= WS_EX_TRANSPARENT.0 as u32;
         ex |= WS_EX_NOACTIVATE.0 as u32;
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex as isize);
-        InvalidateRect(hwnd, None, BOOL(0));
+        InvalidateRect(Some(hwnd), None, false.into());
       }
       LRESULT(0)
     }
@@ -369,8 +364,8 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         clear_last_error(&ctx.shared);
         apply_position(hwnd, &ctx.shared);
         set_visible(hwnd, true, Some(ctx));
-        InvalidateRect(hwnd, None, BOOL(0));
-        let _ = SetTimer(hwnd, TIMER_HIDE, 5200, None);
+        InvalidateRect(Some(hwnd), None, false.into());
+        let _ = SetTimer(Some(hwnd), TIMER_HIDE, 5200, None);
       }
       LRESULT(0)
     }
@@ -398,7 +393,7 @@ unsafe fn set_visible(hwnd: HWND, visible: bool, ctx: Option<&'static mut Window
     let _ = SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
   } else {
     ShowWindow(hwnd, SW_HIDE);
-    let _ = KillTimer(hwnd, TIMER_HIDE);
+    let _ = KillTimer(Some(hwnd), TIMER_HIDE);
   }
 
   if let Some(ctx) = ctx {
@@ -428,7 +423,7 @@ unsafe fn paint(hwnd: HWND) {
 
   // fonts (lazy)
   if ctx.font_title.is_none() || ctx.font_body.is_none() {
-    let dpi = GetDeviceCaps(hdc, windows::Win32::Graphics::Gdi::LOGPIXELSY);
+    let dpi = GetDeviceCaps(Some(hdc), windows::Win32::Graphics::Gdi::LOGPIXELSY);
     let title_px = -mul_div(14, dpi, 72);
     let body_px = -mul_div(12, dpi, 72);
     ctx.font_title = Some(CreateFontW(
@@ -440,11 +435,11 @@ unsafe fn paint(hwnd: HWND) {
       0,
       0,
       0,
-      windows::Win32::Graphics::Gdi::DEFAULT_CHARSET.0 as u32,
-      0,
-      0,
-      0,
-      0,
+      windows::Win32::Graphics::Gdi::DEFAULT_CHARSET,
+      windows::Win32::Graphics::Gdi::OUT_DEFAULT_PRECIS,
+      windows::Win32::Graphics::Gdi::CLIP_DEFAULT_PRECIS,
+      windows::Win32::Graphics::Gdi::DEFAULT_QUALITY,
+      windows::Win32::Graphics::Gdi::DEFAULT_PITCH | windows::Win32::Graphics::Gdi::FF_DONTCARE,
       w!("Segoe UI"),
     ));
     ctx.font_body = Some(CreateFontW(
@@ -456,11 +451,11 @@ unsafe fn paint(hwnd: HWND) {
       0,
       0,
       0,
-      windows::Win32::Graphics::Gdi::DEFAULT_CHARSET.0 as u32,
-      0,
-      0,
-      0,
-      0,
+      windows::Win32::Graphics::Gdi::DEFAULT_CHARSET,
+      windows::Win32::Graphics::Gdi::OUT_DEFAULT_PRECIS,
+      windows::Win32::Graphics::Gdi::CLIP_DEFAULT_PRECIS,
+      windows::Win32::Graphics::Gdi::DEFAULT_QUALITY,
+      windows::Win32::Graphics::Gdi::DEFAULT_PITCH | windows::Win32::Graphics::Gdi::FF_DONTCARE,
       w!("Segoe UI"),
     ));
   }
