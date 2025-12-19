@@ -213,13 +213,11 @@ export default function App() {
     if (!nextByType) return [...types];
     return [...types]
       .map((type) => {
-        const enabled = settings.categories[type].enabled;
         const next = nextByType[type];
         const startMs = next ? new Date(next.startTime).getTime() : Number.POSITIVE_INFINITY;
-        return { type, enabled, startMs };
+        return { type, startMs };
       })
       .sort((a, b) => {
-        if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
         return a.startMs - b.startMs;
       })
       .map((x) => x.type);
