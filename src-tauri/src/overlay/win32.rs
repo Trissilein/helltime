@@ -9,8 +9,8 @@ use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
   BeginPaint, CreateFontW, CreateSolidBrush, DeleteObject, DrawTextW, EndPaint, FillRect, GetDeviceCaps, InvalidateRect,
   SelectObject, SetBkMode, SetTextColor, CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, DEFAULT_PITCH, DEFAULT_QUALITY,
-  DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_TOP, FF_DONTCARE, FONT_PITCH_AND_FAMILY, OUT_DEFAULT_PRECIS, HDC, HGDIOBJ,
-  HFONT, PAINTSTRUCT, TRANSPARENT,
+  DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_TOP, FF_DONTCARE, OUT_DEFAULT_PRECIS, HDC, HGDIOBJ, HFONT, PAINTSTRUCT,
+  TRANSPARENT,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
@@ -345,7 +345,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
       LRESULT(0)
     }
     WM_OVERLAY_EXIT_CONFIG => {
-      if let Some(ctx) = get_ctx(hwnd) {
+      if let Some(_ctx) = get_ctx(hwnd) {
         // restore click-through + noactivate
         let mut ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
         ex |= WS_EX_TRANSPARENT.0 as u32;
@@ -439,7 +439,7 @@ unsafe fn paint(hwnd: HWND) {
       OUT_DEFAULT_PRECIS,
       CLIP_DEFAULT_PRECIS,
       DEFAULT_QUALITY,
-      FONT_PITCH_AND_FAMILY(DEFAULT_PITCH.0 | FF_DONTCARE.0),
+      (DEFAULT_PITCH.0 | FF_DONTCARE.0) as u32,
       w!("Segoe UI"),
     ));
     ctx.font_body = Some(CreateFontW(
@@ -455,7 +455,7 @@ unsafe fn paint(hwnd: HWND) {
       OUT_DEFAULT_PRECIS,
       CLIP_DEFAULT_PRECIS,
       DEFAULT_QUALITY,
-      FONT_PITCH_AND_FAMILY(DEFAULT_PITCH.0 | FF_DONTCARE.0),
+      (DEFAULT_PITCH.0 | FF_DONTCARE.0) as u32,
       w!("Segoe UI"),
     ));
   }
