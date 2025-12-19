@@ -23,13 +23,9 @@ export type Settings = {
   systemToastsEnabled: boolean;
   soundEnabled: boolean;
   autoRefreshEnabled: boolean;
-  overlayToastsEnabled: boolean;
-  overviewOverlayEnabled: boolean;
-  overviewOverlayCategories: Record<ScheduleType, boolean>;
   overlayWindowEnabled: boolean;
   overlayWindowMode: "overview" | "toast";
   overlayWindowCategories: Record<ScheduleType, boolean>;
-  overlayToastsPosition: { x: number; y: number } | null;
   overlayBgHex: string; // "#rrggbb"
   overlayScale: number; // 0.6-2.0
   overlayBgOpacity: number; // 0.2-1.0
@@ -60,13 +56,6 @@ const defaults: Settings = {
   systemToastsEnabled: false,
   soundEnabled: true,
   autoRefreshEnabled: false,
-  overlayToastsEnabled: false,
-  overviewOverlayEnabled: false,
-  overviewOverlayCategories: {
-    helltide: true,
-    legion: true,
-    world_boss: true
-  },
   overlayWindowEnabled: true,
   overlayWindowMode: "overview",
   overlayWindowCategories: {
@@ -74,7 +63,6 @@ const defaults: Settings = {
     legion: true,
     world_boss: true
   },
-  overlayToastsPosition: null,
   overlayBgHex: "#0b1220",
   overlayScale: 1,
   overlayBgOpacity: 0.92,
@@ -90,14 +78,6 @@ function normalizeHexColor(raw: any, fallback: string): string {
   const s = raw.trim().toLowerCase();
   if (/^#[0-9a-f]{6}$/.test(s)) return s;
   return fallback;
-}
-
-function normalizePosition(raw: any): { x: number; y: number } | null {
-  const x = raw?.x;
-  const y = raw?.y;
-  if (typeof x !== "number" || typeof y !== "number") return null;
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-  return { x: Math.round(x), y: Math.round(y) };
 }
 
 function clampUnit(n: unknown, fallback: number): number {
@@ -173,7 +153,6 @@ export function loadSettings(): Settings {
   if (v4 && typeof v4 === "object" && (v4 as any).version === 6) {
     const raw = v4 as any;
     const rawCategories = raw.categories ?? {};
-    const rawOverviewCats = raw.overviewOverlayCategories ?? {};
     const rawOverlayCats = raw.overlayWindowCategories ?? {};
 
     const base: Settings = {
@@ -187,23 +166,6 @@ export function loadSettings(): Settings {
             : defaults.systemToastsEnabled,
       soundEnabled: typeof raw.soundEnabled === "boolean" ? raw.soundEnabled : defaults.soundEnabled,
       autoRefreshEnabled: typeof raw.autoRefreshEnabled === "boolean" ? raw.autoRefreshEnabled : defaults.autoRefreshEnabled,
-      overlayToastsEnabled: typeof raw.overlayToastsEnabled === "boolean" ? raw.overlayToastsEnabled : defaults.overlayToastsEnabled,
-      overviewOverlayEnabled:
-        typeof raw.overviewOverlayEnabled === "boolean" ? raw.overviewOverlayEnabled : defaults.overviewOverlayEnabled,
-      overviewOverlayCategories: {
-        helltide:
-          typeof rawOverviewCats.helltide === "boolean"
-            ? rawOverviewCats.helltide
-            : defaults.overviewOverlayCategories.helltide,
-        legion:
-          typeof rawOverviewCats.legion === "boolean"
-            ? rawOverviewCats.legion
-            : defaults.overviewOverlayCategories.legion,
-        world_boss:
-          typeof rawOverviewCats.world_boss === "boolean"
-            ? rawOverviewCats.world_boss
-            : defaults.overviewOverlayCategories.world_boss
-      },
       overlayWindowEnabled:
         typeof raw.overlayWindowEnabled === "boolean" ? raw.overlayWindowEnabled : defaults.overlayWindowEnabled,
       overlayWindowMode: raw.overlayWindowMode === "toast" ? "toast" : "overview",
@@ -217,7 +179,6 @@ export function loadSettings(): Settings {
             ? rawOverlayCats.world_boss
             : defaults.overlayWindowCategories.world_boss
       },
-      overlayToastsPosition: normalizePosition(raw.overlayToastsPosition),
       overlayBgHex: normalizeHexColor(raw.overlayBgHex, defaults.overlayBgHex),
       overlayScale: clampFloat(raw.overlayScale, defaults.overlayScale, 0.6, 2.0),
       overlayBgOpacity: clampFloat(raw.overlayBgOpacity, defaults.overlayBgOpacity, 0.2, 1.0),
@@ -228,7 +189,7 @@ export function loadSettings(): Settings {
       }
     };
     if (isPanicStopEnabled()) {
-      return { ...base, overlayToastsEnabled: false, overviewOverlayEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+      return { ...base, overlayWindowEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
     }
     return base;
   }
@@ -242,13 +203,9 @@ export function loadSettings(): Settings {
         typeof v4raw.systemToastsEnabled === "boolean" ? v4raw.systemToastsEnabled : defaults.systemToastsEnabled,
       soundEnabled: defaults.soundEnabled,
       autoRefreshEnabled: defaults.autoRefreshEnabled,
-      overlayToastsEnabled: typeof v4raw.overlayToastsEnabled === "boolean" ? v4raw.overlayToastsEnabled : defaults.overlayToastsEnabled,
-      overviewOverlayEnabled: defaults.overviewOverlayEnabled,
-      overviewOverlayCategories: defaults.overviewOverlayCategories,
       overlayWindowEnabled: defaults.overlayWindowEnabled,
       overlayWindowMode: defaults.overlayWindowMode,
       overlayWindowCategories: defaults.overlayWindowCategories,
-      overlayToastsPosition: normalizePosition(v4raw.overlayToastsPosition),
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
       overlayBgOpacity: defaults.overlayBgOpacity,
@@ -259,7 +216,7 @@ export function loadSettings(): Settings {
       }
     };
     if (isPanicStopEnabled()) {
-      return { ...base, overlayToastsEnabled: false, overviewOverlayEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+      return { ...base, overlayWindowEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
     }
     return base;
   }
@@ -272,13 +229,9 @@ export function loadSettings(): Settings {
       systemToastsEnabled: typeof v3.systemToastsEnabled === "boolean" ? v3.systemToastsEnabled : defaults.systemToastsEnabled,
       soundEnabled: defaults.soundEnabled,
       autoRefreshEnabled: defaults.autoRefreshEnabled,
-      overlayToastsEnabled: defaults.overlayToastsEnabled,
-      overviewOverlayEnabled: defaults.overviewOverlayEnabled,
-      overviewOverlayCategories: defaults.overviewOverlayCategories,
       overlayWindowEnabled: defaults.overlayWindowEnabled,
       overlayWindowMode: defaults.overlayWindowMode,
       overlayWindowCategories: defaults.overlayWindowCategories,
-      overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
       overlayBgOpacity: defaults.overlayBgOpacity,
@@ -289,7 +242,7 @@ export function loadSettings(): Settings {
       }
     };
     if (isPanicStopEnabled()) {
-      return { ...base, overlayToastsEnabled: false, overviewOverlayEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+      return { ...base, overlayWindowEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
     }
     return base;
   }
@@ -306,13 +259,9 @@ export function loadSettings(): Settings {
       systemToastsEnabled: defaults.systemToastsEnabled,
       soundEnabled: defaults.soundEnabled,
       autoRefreshEnabled: defaults.autoRefreshEnabled,
-      overlayToastsEnabled: defaults.overlayToastsEnabled,
-      overviewOverlayEnabled: defaults.overviewOverlayEnabled,
-      overviewOverlayCategories: defaults.overviewOverlayCategories,
       overlayWindowEnabled: defaults.overlayWindowEnabled,
       overlayWindowMode: defaults.overlayWindowMode,
       overlayWindowCategories: defaults.overlayWindowCategories,
-      overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
       overlayBgOpacity: defaults.overlayBgOpacity,
@@ -327,7 +276,7 @@ export function loadSettings(): Settings {
       }
     };
     if (isPanicStopEnabled()) {
-      return { ...base, overlayToastsEnabled: false, overviewOverlayEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+      return { ...base, overlayWindowEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
     }
     return base;
   }
@@ -345,13 +294,9 @@ export function loadSettings(): Settings {
       systemToastsEnabled: defaults.systemToastsEnabled,
       soundEnabled: defaults.soundEnabled,
       autoRefreshEnabled: defaults.autoRefreshEnabled,
-      overlayToastsEnabled: defaults.overlayToastsEnabled,
-      overviewOverlayEnabled: defaults.overviewOverlayEnabled,
-      overviewOverlayCategories: defaults.overviewOverlayCategories,
       overlayWindowEnabled: defaults.overlayWindowEnabled,
       overlayWindowMode: defaults.overlayWindowMode,
       overlayWindowCategories: defaults.overlayWindowCategories,
-      overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
       overlayBgOpacity: defaults.overlayBgOpacity,
@@ -362,13 +307,13 @@ export function loadSettings(): Settings {
       }
     };
     if (isPanicStopEnabled()) {
-      return { ...base, overlayToastsEnabled: false, overviewOverlayEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+      return { ...base, overlayWindowEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
     }
     return base;
   }
 
   if (isPanicStopEnabled()) {
-    return { ...defaults, overlayToastsEnabled: false, overviewOverlayEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+    return { ...defaults, overlayWindowEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
   }
   return defaults;
 }

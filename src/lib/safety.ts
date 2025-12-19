@@ -1,4 +1,4 @@
-import { overlayHide } from "./overlay";
+import { setOverlayWindowVisible } from "./overlay_window";
 
 const PANIC_KEY = "helltime:panicStop";
 const PANIC_EVENT = "helltime:panic-stop";
@@ -39,7 +39,7 @@ export async function enablePanicStop(reason?: unknown): Promise<void> {
   }
 
   try {
-    await overlayHide();
+    await setOverlayWindowVisible(false);
   } catch {
     // ignore
   }

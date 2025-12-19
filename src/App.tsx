@@ -5,7 +5,6 @@ import { loadSettings, saveSettings, type BeepPattern, type Settings, type Timer
 import { playBeep } from "./lib/sound";
 import { formatRemainingSpeech, speak } from "./lib/speech";
 import type { ScheduleResponse, ScheduleType, WorldBossScheduleItem } from "./lib/types";
-import { overlayShow } from "./lib/overlay";
 import { openExternalUrl } from "./lib/external";
 import { disablePanicStop, isPanicStopEnabled } from "./lib/safety";
 import { ensureOverlayWindow, OVERLAY_WINDOW_LABEL, setOverlayWindowVisible } from "./lib/overlay_window";
@@ -386,13 +385,6 @@ export default function App() {
     }
   }
 
-  function hexToRgbInt(hex: string): number | null {
-    const s = (hex ?? "").trim();
-    const m = /^#([0-9a-fA-F]{6})$/.exec(s);
-    if (!m) return null;
-    return parseInt(m[1], 16);
-  }
-
   async function showOverlayToast(payload: { title: string; body: string; type?: ScheduleType; kind?: "event" | "debug" }) {
     if (panicStopEnabled) return;
 
@@ -410,23 +402,6 @@ export default function App() {
         console.warn("emitTo overlay failed", e);
       }
     }
-
-    // legacy native win32 toast (kept for rollback)
-    if (settings.overlayToastsEnabled) {
-      const bg = hexToRgbInt(settings.overlayBgHex);
-      await overlayShow(
-        {
-          title: payload.title,
-          body: payload.body,
-          kind: payload.kind,
-          type: payload.type,
-          bg_rgb: bg ?? undefined,
-          scale: settings.overlayScale,
-          bg_a: settings.overlayBgOpacity
-        },
-        settings.overlayToastsPosition
-      );
-    }
   }
 
   function testVolumeBeep(volumeOverride?: number): void {
@@ -438,7 +413,7 @@ export default function App() {
 
   function previewOverlayToast(): void {
     if (panicStopEnabled) return;
-    if (!settings.overlayWindowEnabled && !settings.overlayToastsEnabled) return;
+    if (!settings.overlayWindowEnabled) return;
     const title = "Overlay Vorschau";
     const body = `Skalierung ${Math.round(settings.overlayScale * 100)}% • ${settings.overlayBgHex}`;
     void showOverlayToast({ title, body, type: "helltide", kind: "debug" });
@@ -668,19 +643,6 @@ export default function App() {
                   </div>
 
                   <div className="inline">
-                    <div className="hint">Legacy: Win32 Toast</div>
-                    <label className="toggle">
-                      <input
-                        type="checkbox"
-                        disabled={panicStopEnabled}
-                        checked={settings.overlayToastsEnabled}
-                        onChange={(e) => setSettings((s) => ({ ...s, overlayToastsEnabled: e.target.checked }))}
-                      />
-                      <span className="toggleLabel">{settings.overlayToastsEnabled ? "an" : "aus"}</span>
-                    </label>
-                  </div>
-
-                  <div className="inline">
                     <div className="hint">Ton</div>
                     <label className="toggle">
                       <input
@@ -706,7 +668,7 @@ export default function App() {
                       <button
                         className="btn"
                         type="button"
-                        disabled={panicStopEnabled || (!settings.overlayWindowEnabled && !settings.overlayToastsEnabled)}
+                        disabled={panicStopEnabled || !settings.overlayWindowEnabled}
                         onClick={() => previewOverlayToast()}
                       >
                         Vorschau
