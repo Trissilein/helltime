@@ -439,16 +439,22 @@ input {
   cursor: pointer;
 }
 
-.switch input {
-  position: absolute;
-  opacity: 0;
+.switchControl {
+  position: relative;
   width: 42px;
   height: 22px;
+  flex: 0 0 auto;
+}
+
+.switchControl input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
   margin: 0;
   cursor: pointer;
 }
 
-.switch input:focus-visible + .switchTrack {
+.switchControl input:focus-visible + .switchTrack {
   outline: 2px solid rgba(255, 255, 255, 0.35);
   outline-offset: 2px;
 }
@@ -460,8 +466,8 @@ input {
 }
 
 .switchTrack {
-  width: 42px;
-  height: 22px;
+  width: 100%;
+  height: 100%;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.06);
@@ -480,12 +486,12 @@ input {
   transition: transform 140ms ease, background 140ms ease;
 }
 
-.switch input:checked + .switchTrack {
+.switchControl input:checked + .switchTrack {
   border-color: rgba(255, 77, 77, 0.6);
   background: rgba(255, 77, 77, 0.22);
 }
 
-.switch input:checked + .switchTrack .switchThumb {
+.switchControl input:checked + .switchTrack .switchThumb {
   transform: translateX(20px);
   background: rgba(255, 255, 255, 0.92);
 }

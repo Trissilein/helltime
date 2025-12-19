@@ -386,14 +386,16 @@ export default function App() {
                 {loading ? "Lade…" : "Refresh"}
               </button>
               <label className="switch">
-                <input
-                  type="checkbox"
-                  disabled={panicStopEnabled}
-                  checked={settings.autoRefreshEnabled}
-                  onChange={(e) => setSettings((s) => ({ ...s, autoRefreshEnabled: e.target.checked }))}
-                />
-                <span className="switchTrack">
-                  <span className="switchThumb" />
+                <span className="switchControl">
+                  <input
+                    type="checkbox"
+                    disabled={panicStopEnabled}
+                    checked={settings.autoRefreshEnabled}
+                    onChange={(e) => setSettings((s) => ({ ...s, autoRefreshEnabled: e.target.checked }))}
+                  />
+                  <span className="switchTrack">
+                    <span className="switchThumb" />
+                  </span>
                 </span>
                 <span className="switchLabel">Auto</span>
               </label>
@@ -461,14 +463,16 @@ export default function App() {
                 <div className="inline">
                   <div className="hint">Overlay Toast (Topmost)</div>
                   <label className="switch">
-                    <input
-                      type="checkbox"
-                      disabled={panicStopEnabled}
-                      checked={settings.overlayToastsEnabled}
-                      onChange={(e) => setSettings((s) => ({ ...s, overlayToastsEnabled: e.target.checked }))}
-                    />
-                    <span className="switchTrack">
-                      <span className="switchThumb" />
+                    <span className="switchControl">
+                      <input
+                        type="checkbox"
+                        disabled={panicStopEnabled}
+                        checked={settings.overlayToastsEnabled}
+                        onChange={(e) => setSettings((s) => ({ ...s, overlayToastsEnabled: e.target.checked }))}
+                      />
+                      <span className="switchTrack">
+                        <span className="switchThumb" />
+                      </span>
                     </span>
                     <span className="switchLabel">{settings.overlayToastsEnabled ? "an" : "aus"}</span>
                   </label>
@@ -477,14 +481,16 @@ export default function App() {
                 <div className="inline">
                   <div className="hint">Ton</div>
                   <label className="switch">
-                    <input
-                      type="checkbox"
-                      disabled={panicStopEnabled}
-                      checked={settings.soundEnabled}
-                      onChange={(e) => setSettings((s) => ({ ...s, soundEnabled: e.target.checked }))}
-                    />
-                    <span className="switchTrack">
-                      <span className="switchThumb" />
+                    <span className="switchControl">
+                      <input
+                        type="checkbox"
+                        disabled={panicStopEnabled}
+                        checked={settings.soundEnabled}
+                        onChange={(e) => setSettings((s) => ({ ...s, soundEnabled: e.target.checked }))}
+                      />
+                      <span className="switchTrack">
+                        <span className="switchThumb" />
+                      </span>
                     </span>
                     <span className="switchLabel">{settings.soundEnabled ? "an" : "aus"}</span>
                   </label>
@@ -587,15 +593,17 @@ export default function App() {
                   <div className="categoryRight">
                     <div className="pill">{timeLabel}</div>
                     <label className="switch" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={category.enabled}
-                        onChange={(e) => setCategoryEnabled(type, e.target.checked)}
-                        onClick={(e) => e.stopPropagation()}
-                        onPointerDown={(e) => e.stopPropagation()}
-                      />
-                      <span className="switchTrack">
-                        <span className="switchThumb" />
+                      <span className="switchControl">
+                        <input
+                          type="checkbox"
+                          checked={category.enabled}
+                          onChange={(e) => setCategoryEnabled(type, e.target.checked)}
+                          onClick={(e) => e.stopPropagation()}
+                          onPointerDown={(e) => e.stopPropagation()}
+                        />
+                        <span className="switchTrack">
+                          <span className="switchThumb" />
+                        </span>
                       </span>
                       <span className="switchLabel">Erinnern</span>
                     </label>
