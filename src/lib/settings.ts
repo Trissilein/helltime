@@ -17,15 +17,16 @@ export type CategorySettings = {
 };
 
 export type Settings = {
-  version: 4;
+  version: 5;
   volume: number; // 0-1
   systemToastsEnabled: boolean;
   overlayToastsEnabled: boolean;
   overlayToastsPosition: { x: number; y: number } | null;
+  overlayBgHex: string; // "#rrggbb"
   categories: Record<ScheduleType, CategorySettings>;
 };
 
-const STORAGE_KEY = "settings_v4";
+const STORAGE_KEY = "settings_v5";
 
 function defaultTimers(): [TimerSettings, TimerSettings, TimerSettings] {
   return [
@@ -44,17 +45,25 @@ function defaultCategory(enabled = true): CategorySettings {
 }
 
 const defaults: Settings = {
-  version: 4,
+  version: 5,
   volume: 0.8,
   systemToastsEnabled: false,
   overlayToastsEnabled: false,
   overlayToastsPosition: null,
+  overlayBgHex: "#0b1220",
   categories: {
     helltide: defaultCategory(true),
     legion: defaultCategory(true),
     world_boss: defaultCategory(true)
   }
 };
+
+function normalizeHexColor(raw: any, fallback: string): string {
+  if (typeof raw !== "string") return fallback;
+  const s = raw.trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(s)) return s;
+  return fallback;
+}
 
 function normalizePosition(raw: any): { x: number; y: number } | null {
   const x = raw?.x;
@@ -129,12 +138,12 @@ function cloneTimers(timers: [TimerSettings, TimerSettings, TimerSettings]): [Ti
 
 export function loadSettings(): Settings {
   const v4 = readJson<unknown>(STORAGE_KEY, null);
-  if (v4 && typeof v4 === "object" && (v4 as any).version === 4) {
+  if (v4 && typeof v4 === "object" && (v4 as any).version === 5) {
     const raw = v4 as any;
     const rawCategories = raw.categories ?? {};
 
     return {
-      version: 4,
+      version: 5,
       volume: clampUnit(raw.volume, defaults.volume),
       systemToastsEnabled:
         typeof raw.systemToastsEnabled === "boolean"
@@ -144,6 +153,7 @@ export function loadSettings(): Settings {
             : defaults.systemToastsEnabled,
       overlayToastsEnabled: typeof raw.overlayToastsEnabled === "boolean" ? raw.overlayToastsEnabled : defaults.overlayToastsEnabled,
       overlayToastsPosition: normalizePosition(raw.overlayToastsPosition),
+      overlayBgHex: normalizeHexColor(raw.overlayBgHex, defaults.overlayBgHex),
       categories: {
         helltide: normalizeCategory(rawCategories.helltide, defaults.categories.helltide),
         legion: normalizeCategory(rawCategories.legion, defaults.categories.legion),
@@ -152,14 +162,33 @@ export function loadSettings(): Settings {
     };
   }
 
+  const v4raw = readJson<any>("settings_v4", null);
+  if (v4raw && typeof v4raw === "object" && v4raw.version === 4) {
+    return {
+      version: 5,
+      volume: clampUnit(v4raw.volume, defaults.volume),
+      systemToastsEnabled:
+        typeof v4raw.systemToastsEnabled === "boolean" ? v4raw.systemToastsEnabled : defaults.systemToastsEnabled,
+      overlayToastsEnabled: typeof v4raw.overlayToastsEnabled === "boolean" ? v4raw.overlayToastsEnabled : defaults.overlayToastsEnabled,
+      overlayToastsPosition: normalizePosition(v4raw.overlayToastsPosition),
+      overlayBgHex: defaults.overlayBgHex,
+      categories: {
+        helltide: normalizeCategory(v4raw.categories?.helltide, defaults.categories.helltide),
+        legion: normalizeCategory(v4raw.categories?.legion, defaults.categories.legion),
+        world_boss: normalizeCategory(v4raw.categories?.world_boss, defaults.categories.world_boss)
+      }
+    };
+  }
+
   const v3 = readJson<any>("settings_v3", null);
   if (v3 && typeof v3 === "object" && v3.version === 3) {
     return {
-      version: 4,
+      version: 5,
       volume: clampUnit(v3.volume, defaults.volume),
       systemToastsEnabled: typeof v3.systemToastsEnabled === "boolean" ? v3.systemToastsEnabled : defaults.systemToastsEnabled,
       overlayToastsEnabled: defaults.overlayToastsEnabled,
       overlayToastsPosition: defaults.overlayToastsPosition,
+      overlayBgHex: defaults.overlayBgHex,
       categories: {
         helltide: normalizeCategory(v3.categories?.helltide, defaults.categories.helltide),
         legion: normalizeCategory(v3.categories?.legion, defaults.categories.legion),
@@ -175,11 +204,12 @@ export function loadSettings(): Settings {
     const timers = timersFromV2(v2.levels);
 
     return {
-      version: 4,
+      version: 5,
       volume: defaults.volume,
       systemToastsEnabled: defaults.systemToastsEnabled,
       overlayToastsEnabled: defaults.overlayToastsEnabled,
       overlayToastsPosition: defaults.overlayToastsPosition,
+      overlayBgHex: defaults.overlayBgHex,
       categories: {
         helltide: { enabled: typeof enabled.helltide === "boolean" ? enabled.helltide : true, timerCount, timers: cloneTimers(timers) },
         legion: { enabled: typeof enabled.legion === "boolean" ? enabled.legion : true, timerCount, timers: cloneTimers(timers) },
@@ -200,11 +230,12 @@ export function loadSettings(): Settings {
     timers[0] = { ...timers[0], minutesBefore };
 
     return {
-      version: 4,
+      version: 5,
       volume: defaults.volume,
       systemToastsEnabled: defaults.systemToastsEnabled,
       overlayToastsEnabled: defaults.overlayToastsEnabled,
       overlayToastsPosition: defaults.overlayToastsPosition,
+      overlayBgHex: defaults.overlayBgHex,
       categories: {
         helltide: { enabled, timerCount: 1, timers },
         legion: { ...defaultCategory(false) },

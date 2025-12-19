@@ -393,6 +393,86 @@ input {
   white-space: nowrap;
 }
 
+.switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  user-select: none;
+}
+
+.switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.switchTrack {
+  width: 42px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.06);
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.switchThumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  transition: transform 140ms ease, background 140ms ease;
+}
+
+.switch input:checked + .switchTrack {
+  border-color: rgba(255, 77, 77, 0.6);
+  background: rgba(255, 77, 77, 0.22);
+}
+
+.switch input:checked + .switchTrack .switchThumb {
+  transform: translateX(20px);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.switchLabel {
+  white-space: nowrap;
+}
+
+.section {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.sectionHeader {
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.sectionTitle {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.sectionBody {
+  padding: 10px 12px;
+  display: grid;
+  gap: 10px;
+}
+
 .select {
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.06);

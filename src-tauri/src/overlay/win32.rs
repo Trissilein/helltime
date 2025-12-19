@@ -471,8 +471,17 @@ unsafe fn paint(hwnd: HWND) {
     bottom: height,
   };
 
+  let toast = ctx.shared.toast.lock().ok().and_then(|t| t.clone());
+  let bg_rgb = toast.as_ref().and_then(|t| t.bg_rgb).unwrap_or(0x0b1220);
+  let (bg_r, bg_g, bg_b) = (
+    ((bg_rgb >> 16) & 0xff) as u8,
+    ((bg_rgb >> 8) & 0xff) as u8,
+    (bg_rgb & 0xff) as u8,
+  );
+  let bg_ref = COLORREF((bg_b as u32) << 16 | (bg_g as u32) << 8 | (bg_r as u32));
+
   // background
-  let bg = CreateSolidBrush(COLORREF(0x20120b)); // BGR
+  let bg = CreateSolidBrush(bg_ref); // BGR COLORREF
   FillRect(hdc, &client, bg);
   let _ = DeleteObject(HGDIOBJ(bg.0));
 
@@ -490,7 +499,6 @@ unsafe fn paint(hwnd: HWND) {
   body_rect.bottom -= 8;
 
   let cfg = ctx.shared.config_mode.lock().ok().map(|g| *g).unwrap_or(false);
-  let toast = ctx.shared.toast.lock().ok().and_then(|t| t.clone());
 
   let (title, body) = if cfg {
     ("Toast Position".to_string(), "Zieh mich an die gewünschte Stelle.".to_string())
@@ -500,11 +508,18 @@ unsafe fn paint(hwnd: HWND) {
     ("helltime".to_string(), "—".to_string())
   };
 
+  let title_color = match toast.as_ref().and_then(|t| t.event_type.as_deref()) {
+    Some("helltide") => COLORREF(0x3c92fb),   // #fb923c
+    Some("legion") => COLORREF(0x4444ef),     // #ef4444
+    Some("world_boss") => COLORREF(0x24bffb), // #fbbf24
+    _ => COLORREF(0xEDEDED),
+  };
+
   SetBkMode(hdc, TRANSPARENT);
   if let Some(f) = ctx.font_title {
     let _ = SelectObject(hdc, HGDIOBJ(f.0));
   }
-  SetTextColor(hdc, COLORREF(0xEDEDED));
+  SetTextColor(hdc, title_color);
   let mut title_w: Vec<u16> = title.encode_utf16().collect();
   let _ = DrawTextW(
     hdc,

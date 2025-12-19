@@ -7,6 +7,7 @@ export type OverlayPayload = {
   body: string;
   kind?: string;
   type?: "helltide" | "legion" | "world_boss";
+  bg_rgb?: number;
 };
 
 export type OverlayStatus = {
@@ -81,4 +82,3 @@ export async function overlaySetPosition(position: OverlayPosition): Promise<voi
     console.warn("overlay_set_position failed", e);
   }
 }
-

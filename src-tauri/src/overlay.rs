@@ -14,6 +14,7 @@ pub struct OverlayPayload {
   pub kind: Option<String>,
   #[serde(rename = "type")]
   pub event_type: Option<String>,
+  pub bg_rgb: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -87,4 +88,3 @@ pub(crate) struct Shared {
   pub position: Arc<Mutex<Option<OverlayPosition>>>,
   pub last_error: Arc<Mutex<Option<String>>>,
 }
-

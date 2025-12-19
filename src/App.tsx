@@ -58,6 +58,10 @@ function spokenTypeLabel(type: ScheduleType): string {
   }
 }
 
+function makeDebugSpeech(type: ScheduleType, timerIndex: number, minutesBefore: number): string {
+  return `${spokenTypeLabel(type)}. Debug Timer ${timerIndex + 1}. ${minutesBefore} Minuten vorher.`;
+}
+
 function findNext<T extends { startTime: string }>(items: T[], now: number): T | null {
   let best: T | null = null;
   let bestStartMs = Number.POSITIVE_INFINITY;
@@ -104,6 +108,7 @@ export default function App() {
   const [now, setNow] = useState(() => Date.now());
   const [lastRefreshAt, setLastRefreshAt] = useState<number | null>(null);
   const [overlayInfo, setOverlayInfo] = useState<Awaited<ReturnType<typeof overlayStatus>>>(null);
+  const [overlaySavedAt, setOverlaySavedAt] = useState<number | null>(null);
 
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const firedRef = useRef<FiredMap>(loadFired());
@@ -273,14 +278,22 @@ export default function App() {
     }
   }
 
+  function hexToRgbInt(hex: string): number | null {
+    const s = (hex ?? "").trim();
+    const m = /^#([0-9a-fA-F]{6})$/.exec(s);
+    if (!m) return null;
+    return parseInt(m[1], 16);
+  }
+
   async function testSystemToast(): Promise<void> {
     await notify("helltime – Test", `System-Toast Test • ${formatClock(Date.now())}`);
   }
 
   async function showOverlayToast(payload: { title: string; body: string; type?: ScheduleType; kind?: "event" | "debug" }) {
     if (!settings.overlayToastsEnabled) return;
+    const bg = hexToRgbInt(settings.overlayBgHex);
     await overlayShow(
-      { title: payload.title, body: payload.body, kind: payload.kind, type: payload.type },
+      { title: payload.title, body: payload.body, kind: payload.kind, type: payload.type, bg_rgb: bg ?? undefined },
       settings.overlayToastsPosition
     );
   }
@@ -294,6 +307,7 @@ export default function App() {
     if (!pos) return;
     setSettings((s) => ({ ...s, overlayToastsEnabled: true, overlayToastsPosition: pos }));
     await overlayExitConfig();
+    setOverlaySavedAt(Date.now());
   }
 
   function testVolumeBeep(volumeOverride?: number): void {
@@ -323,7 +337,7 @@ export default function App() {
         const beepMs = playBeep(timer.beepPattern, timer.pitchHz, settings.volume);
         if (timer.ttsEnabled) {
           window.setTimeout(() => {
-            void speak(`${title}. ${label}`, settings.volume);
+            void speak(makeDebugSpeech(type, i, timer.minutesBefore), settings.volume);
           }, beepMs + ttsPauseMs);
         }
 
@@ -367,52 +381,6 @@ export default function App() {
                 {nextEnabledOverall ? `${nextEnabledOverall.name} • ${formatLocalTime(nextEnabledOverall.startTime)}` : "—"}
               </div>
             </div>
-            <div className="inline">
-              <div className="hint">System Toaster</div>
-              <label className="toggle">
-                <input
-                  type="checkbox"
-                  checked={settings.systemToastsEnabled}
-                  onChange={(e) => setSettings((s) => ({ ...s, systemToastsEnabled: e.target.checked }))}
-                />
-                <span className="toggleLabel">anzeigen</span>
-              </label>
-            </div>
-            <div className="inline">
-              <div className="hint">Overlay Toast (Mini-Fenster)</div>
-              <div className="actions">
-                <label className="toggle">
-                  <input
-                    type="checkbox"
-                    checked={settings.overlayToastsEnabled}
-                    onChange={(e) => setSettings((s) => ({ ...s, overlayToastsEnabled: e.target.checked }))}
-                  />
-                  <span className="toggleLabel">aktiv</span>
-                </label>
-                <button className="btn" type="button" onClick={() => void startOverlayPositionMode()}>
-                  Position
-                </button>
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={() => void saveOverlayPosition()}
-                >
-                  Speichern
-                </button>
-                <button className="btn" type="button" onClick={() => void showOverlayToast({ title: "helltime", body: "Overlay Toast Test", kind: "debug" })}>
-                  Test
-                </button>
-                <button className="btn" type="button" onClick={() => void overlayStatus().then((s) => setOverlayInfo(s))}>
-                  Status
-                </button>
-              </div>
-            </div>
-            {overlayInfo ? (
-              <div className="hint">
-                Overlay: {overlayInfo.supported ? "supported" : "n/a"} • running: {String(overlayInfo.running)} • visible:{" "}
-                {String(overlayInfo.visible)} • config: {String(overlayInfo.config_mode)} • err: {overlayInfo.last_error ?? "—"}
-              </div>
-            ) : null}
             {settings.systemToastsEnabled ? (
               <div className="hint">
                 Hinweis: Position/Anzeige hängt vom Betriebssystem ab (Windows: Fokusassist & Benachrichtigungseinstellungen prüfen).
@@ -438,11 +406,77 @@ export default function App() {
                 }}
               />
             </div>
+            <div className="section">
+              <div className="sectionHeader">
+                <div className="sectionTitle">Benachrichtigungen</div>
+                <div className="pill small">Overlay + System</div>
+              </div>
+              <div className="sectionBody">
+                <div className="inline">
+                  <div className="hint">Overlay Toast (Topmost)</div>
+                  <label className="switch">
+                    <input
+                      type="checkbox"
+                      checked={settings.overlayToastsEnabled}
+                      onChange={(e) => setSettings((s) => ({ ...s, overlayToastsEnabled: e.target.checked }))}
+                    />
+                    <span className="switchTrack">
+                      <span className="switchThumb" />
+                    </span>
+                    <span className="switchLabel">{settings.overlayToastsEnabled ? "an" : "aus"}</span>
+                  </label>
+                </div>
+
+                <div className="inline">
+                  <div className="hint">System Toast (Windows)</div>
+                  <label className="switch">
+                    <input
+                      type="checkbox"
+                      checked={settings.systemToastsEnabled}
+                      onChange={(e) => setSettings((s) => ({ ...s, systemToastsEnabled: e.target.checked }))}
+                    />
+                    <span className="switchTrack">
+                      <span className="switchThumb" />
+                    </span>
+                    <span className="switchLabel">{settings.systemToastsEnabled ? "an" : "aus"}</span>
+                  </label>
+                </div>
+
+                <div className="inline">
+                  <div className="hint">Overlay Hintergrund</div>
+                  <div className="actions">
+                    <input
+                      type="color"
+                      value={settings.overlayBgHex}
+                      onChange={(e) => setSettings((s) => ({ ...s, overlayBgHex: e.target.value }))}
+                      title="Overlay Hintergrund"
+                    />
+                    <div className="pill">{settings.overlayBgHex}</div>
+                    <button className="btn" type="button" onClick={() => void startOverlayPositionMode()}>
+                      Position
+                    </button>
+                    <button className="btn" type="button" onClick={() => void saveOverlayPosition()}>
+                      Speichern
+                    </button>
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() => void showOverlayToast({ title: "helltime", body: "Overlay Toast Test", kind: "debug" })}
+                    >
+                      Test
+                    </button>
+                  </div>
+                </div>
+
+                {overlaySavedAt ? <div className="hint">Gespeichert: {formatClock(overlaySavedAt)}</div> : null}
+              </div>
+            </div>
+
             <div className="inline">
               <div className="hint">Debug</div>
               <div className="actions">
                 <button className="btn" type="button" onClick={() => void testSystemToast()}>
-                  Test Toast
+                  Test System-Toast
                 </button>
                 <button className="btn" type="button" onClick={() => testVolumeBeep()}>
                   Test Ton
@@ -450,8 +484,17 @@ export default function App() {
                 <button className="btn" type="button" onClick={() => void fireAllDebug()}>
                   Alles feuern
                 </button>
+                <button className="btn" type="button" onClick={() => void overlayStatus().then((s) => setOverlayInfo(s))}>
+                  Overlay Status
+                </button>
               </div>
             </div>
+            {overlayInfo ? (
+              <div className="hint">
+                Overlay: {overlayInfo.supported ? "supported" : "n/a"} • running: {String(overlayInfo.running)} • visible:{" "}
+                {String(overlayInfo.visible)} • config: {String(overlayInfo.config_mode)} • err: {overlayInfo.last_error ?? "—"}
+              </div>
+            ) : null}
             <div className="hint">Kategorien aktivieren und Timer pro Kategorie konfigurieren.</div>
             {error ? <div className="error">Fehler: {error}</div> : null}
           </div>
