@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { isTauri } from "@tauri-apps/api/core";
 import { fetchSchedule } from "./lib/helltides";
 import { loadSettings } from "./lib/settings";
 import { formatCountdown, formatLocalTime } from "./lib/time";
@@ -56,6 +57,13 @@ function getEventName(type: ScheduleType, item: { startTime: string } | null): {
 
 const types: ScheduleType[] = ["helltide", "legion", "world_boss"];
 
+type ToastPayload = {
+  title: string;
+  body: string;
+  type?: ScheduleType;
+  durationMs?: number;
+};
+
 export default function OverlayWindow() {
   const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +71,7 @@ export default function OverlayWindow() {
   const [lastRefreshAt, setLastRefreshAt] = useState<number | null>(null);
   const [settingsVersion, setSettingsVersion] = useState(0);
   const [settings, setSettings] = useState(() => loadSettings());
+  const [toast, setToast] = useState<{ payload: ToastPayload; shownAt: number } | null>(null);
 
   useEffect(() => {
     document.body.classList.add("overviewMode");
@@ -111,6 +120,32 @@ export default function OverlayWindow() {
     return () => window.clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    if (!isTauri()) return;
+    let unlisten: (() => void) | null = null;
+    void (async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        unlisten = await listen<ToastPayload>("helltime:toast", (event) => {
+          const payload = event.payload;
+          if (!payload?.title) return;
+          setToast({ payload, shownAt: Date.now() });
+        });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn("overlay: listen helltime:toast failed", e);
+      }
+    })();
+
+    return () => {
+      try {
+        unlisten?.();
+      } catch {
+        // ignore
+      }
+    };
+  }, []);
+
   const nextByType = useMemo(() => {
     if (!schedule) return null;
     return {
@@ -150,6 +185,12 @@ export default function OverlayWindow() {
   const bgAlpha = clampFloat(settings.overlayBgOpacity, 0.92, 0.2, 1.0);
   const bg = hexToRgba(settings.overlayBgHex, bgAlpha);
 
+  const toastVisible = useMemo(() => {
+    if (!toast) return false;
+    const ms = toast.payload.durationMs ?? 5200;
+    return now - toast.shownAt < ms;
+  }, [toast, now]);
+
   return (
     <div
       className="container overlayOverview overlayHost"
@@ -167,7 +208,15 @@ export default function OverlayWindow() {
 
       {error ? <div className="overlayOverviewError">Fehler</div> : null}
 
+      {toast && toastVisible ? (
+        <div className={`overlayToast ${toast.payload.type ?? ""}`}>
+          <div className="overlayToastTitle">{toast.payload.title}</div>
+          <div className="overlayToastBody">{toast.payload.body}</div>
+        </div>
+      ) : null}
+
       <div className="overlayOverviewRows">
+        {settings.overlayWindowMode === "toast" && !toastVisible ? <div className="overlayOverviewMeta">Warte auf Toast…</div> : null}
         {ordered.length === 0 ? <div className="overlayOverviewError">Keine Kategorien ausgewählt</div> : null}
         {ordered.map((type) => {
           const next = nextByType ? nextByType[type] : null;

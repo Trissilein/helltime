@@ -9,6 +9,7 @@ import { overlayEnterConfig, overlayExitConfig, overlayGetPosition, overlayShow 
 import { openExternalUrl } from "./lib/external";
 import { disablePanicStop, isPanicStopEnabled } from "./lib/safety";
 import { resetOverviewOverlayWindow, setOverviewOverlayEnabled } from "./lib/overview_window";
+import { ensureOverlayWindow, OVERLAY_WINDOW_LABEL } from "./lib/overlay_window";
 
 type FiredMap = Record<string, number>;
 
@@ -404,6 +405,21 @@ export default function App() {
       },
       settings.overlayToastsPosition
     );
+
+    if (settings.overlayWindowEnabled) {
+      try {
+        await ensureOverlayWindow();
+        const { emitTo } = await import("@tauri-apps/api/event");
+        await emitTo(OVERLAY_WINDOW_LABEL, "helltime:toast", {
+          title: payload.title,
+          body: payload.body,
+          type: payload.type,
+          durationMs: payload.kind === "debug" ? 8000 : 5200
+        });
+      } catch (e) {
+        console.warn("emitTo overlay failed", e);
+      }
+    }
   }
 
   async function startOverlayPositionMode(): Promise<void> {
