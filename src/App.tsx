@@ -287,6 +287,47 @@ export default function App() {
   }, [schedule, now, settings, panicStopEnabled]);
 
   function setCategoryEnabled(type: ScheduleType, enabled: boolean) {
+    if (enabled) {
+      const nowMs = Date.now();
+      const next = nextByType ? nextByType[type] : null;
+      if (schedule && next) {
+        const startMs = new Date(next.startTime).getTime();
+        const remainingMs = startMs - nowMs;
+        if (Number.isFinite(remainingMs) && remainingMs > 0) {
+          const category = settings.categories[type];
+          const candidates = Array.from({ length: category.timerCount })
+            .map((_, i) => ({ i, timer: category.timers[i] }))
+            .filter(({ timer }) => timer.minutesBefore * 60_000 >= remainingMs);
+
+          candidates.sort((a, b) => a.timer.minutesBefore - b.timer.minutesBefore);
+          const chosen = candidates[0];
+
+          if (chosen) {
+            const key = `${type}:${(next as any).id ?? next.startTime}:${chosen.i}`;
+            if (!firedRef.current[key]) {
+              firedRef.current[key] = nowMs;
+              saveFired(firedRef.current);
+
+              const title = getEventName(type, next);
+              const spokenTitle = getSpokenEventName(type, next);
+              const timeLabel = formatLocalTime(next.startTime);
+              const body = `Start in ${formatCountdown(Math.max(0, remainingMs))} • ${timeLabel}`;
+              void showOverlayToast({ title, body, type, kind: "event" });
+
+              if (settings.soundEnabled) {
+                const beepMs = playBeep(chosen.timer.beepPattern, chosen.timer.pitchHz, settings.volume);
+                if (chosen.timer.ttsEnabled) {
+                  window.setTimeout(() => {
+                    void speak(`${spokenTitle} in ${formatRemainingSpeech(Math.max(0, remainingMs))}`, settings.volume);
+                  }, beepMs + 500);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     if (!enabled) setCategoryOpen((s) => ({ ...s, [type]: false }));
     setSettings((s) => ({
       ...s,
