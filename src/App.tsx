@@ -5,11 +5,10 @@ import { loadSettings, saveSettings, type BeepPattern, type Settings, type Timer
 import { playBeep } from "./lib/sound";
 import { formatRemainingSpeech, speak } from "./lib/speech";
 import type { ScheduleResponse, ScheduleType, WorldBossScheduleItem } from "./lib/types";
-import { overlayEnterConfig, overlayExitConfig, overlayGetPosition, overlayShow } from "./lib/overlay";
+import { overlayShow } from "./lib/overlay";
 import { openExternalUrl } from "./lib/external";
 import { disablePanicStop, isPanicStopEnabled } from "./lib/safety";
-import { resetOverviewOverlayWindow, setOverviewOverlayEnabled } from "./lib/overview_window";
-import { ensureOverlayWindow, OVERLAY_WINDOW_LABEL } from "./lib/overlay_window";
+import { ensureOverlayWindow, OVERLAY_WINDOW_LABEL, setOverlayWindowVisible } from "./lib/overlay_window";
 
 type FiredMap = Record<string, number>;
 
@@ -106,7 +105,6 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [lastRefreshAt, setLastRefreshAt] = useState<number | null>(null);
-  const [overlaySavedAt, setOverlaySavedAt] = useState<number | null>(null);
   const [nextAutoRefreshAt, setNextAutoRefreshAt] = useState<number | null>(null);
   const autoRefreshTimeoutRef = useRef<number | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -140,11 +138,17 @@ export default function App() {
 
   useEffect(() => {
     if (panicStopEnabled) {
-      void setOverviewOverlayEnabled(false);
+      void setOverlayWindowVisible(false);
       return;
     }
-    void setOverviewOverlayEnabled(settings.overviewOverlayEnabled);
-  }, [settings.overviewOverlayEnabled, panicStopEnabled]);
+    if (!settings.overlayWindowEnabled) {
+      void setOverlayWindowVisible(false);
+      return;
+    }
+
+    void ensureOverlayWindow();
+    void setOverlayWindowVisible(settings.overlayWindowMode === "overview");
+  }, [settings.overlayWindowEnabled, settings.overlayWindowMode, panicStopEnabled]);
 
   useEffect(() => {
     firedRef.current = pruneFired(firedRef.current, now);
@@ -391,20 +395,6 @@ export default function App() {
 
   async function showOverlayToast(payload: { title: string; body: string; type?: ScheduleType; kind?: "event" | "debug" }) {
     if (panicStopEnabled) return;
-    if (!settings.overlayToastsEnabled) return;
-    const bg = hexToRgbInt(settings.overlayBgHex);
-    await overlayShow(
-      {
-        title: payload.title,
-        body: payload.body,
-        kind: payload.kind,
-        type: payload.type,
-        bg_rgb: bg ?? undefined,
-        scale: settings.overlayScale,
-        bg_a: settings.overlayBgOpacity
-      },
-      settings.overlayToastsPosition
-    );
 
     if (settings.overlayWindowEnabled) {
       try {
@@ -420,30 +410,23 @@ export default function App() {
         console.warn("emitTo overlay failed", e);
       }
     }
-  }
 
-  async function startOverlayPositionMode(): Promise<void> {
-    await overlayEnterConfig(settings.overlayToastsPosition);
-  }
-
-  async function saveOverlayPosition(): Promise<void> {
-    await overlayExitConfig();
-    // give the native window thread time to persist the last dragged position
-    const prev = settings.overlayToastsPosition;
-    let pos: Awaited<ReturnType<typeof overlayGetPosition>> = null;
-    for (let i = 0; i < 6; i++) {
-      await new Promise((r) => window.setTimeout(r, 90));
-      pos = await overlayGetPosition();
-      if (!pos) continue;
-      if (!prev || pos.x !== prev.x || pos.y !== prev.y) break;
+    // legacy native win32 toast (kept for rollback)
+    if (settings.overlayToastsEnabled) {
+      const bg = hexToRgbInt(settings.overlayBgHex);
+      await overlayShow(
+        {
+          title: payload.title,
+          body: payload.body,
+          kind: payload.kind,
+          type: payload.type,
+          bg_rgb: bg ?? undefined,
+          scale: settings.overlayScale,
+          bg_a: settings.overlayBgOpacity
+        },
+        settings.overlayToastsPosition
+      );
     }
-    if (!pos) return;
-    setSettings((s) => {
-      const next = { ...s, overlayToastsEnabled: true, overlayToastsPosition: pos };
-      saveSettings(next);
-      return next;
-    });
-    setOverlaySavedAt(Date.now());
   }
 
   function testVolumeBeep(volumeOverride?: number): void {
@@ -455,7 +438,7 @@ export default function App() {
 
   function previewOverlayToast(): void {
     if (panicStopEnabled) return;
-    if (!settings.overlayToastsEnabled) return;
+    if (!settings.overlayWindowEnabled && !settings.overlayToastsEnabled) return;
     const title = "Overlay Vorschau";
     const body = `Skalierung ${Math.round(settings.overlayScale * 100)}% • ${settings.overlayBgHex}`;
     void showOverlayToast({ title, body, type: "helltide", kind: "debug" });
@@ -490,17 +473,17 @@ export default function App() {
                 <input
                   type="checkbox"
                   disabled={panicStopEnabled}
-                  checked={settings.overviewOverlayEnabled}
+                  checked={settings.overlayWindowEnabled}
                   onChange={(e) => {
                     const checked = e.target.checked;
                     setSettings((s) => {
-                      const next = { ...s, overviewOverlayEnabled: checked };
+                      const next = { ...s, overlayWindowEnabled: checked };
                       saveSettings(next);
                       return next;
                     });
                   }}
                 />
-                <span className="toggleLabel">Übersicht</span>
+                <span className="toggleLabel">Overlay</span>
               </label>
               <button className="btn primary" type="button" onClick={() => void openExternalUrl("https://helltides.com")}>
                 Quelle
@@ -566,34 +549,75 @@ export default function App() {
               {notificationsOpen ? (
                 <div className="sectionBody">
                   <div className="inline">
-                    <div className="hint">Overlay Toast (Topmost)</div>
+                    <div className="hint">Overlay (Tauri Window)</div>
                     <label className="toggle">
                       <input
                         type="checkbox"
                         disabled={panicStopEnabled}
-                        checked={settings.overlayToastsEnabled}
-                        onChange={(e) => setSettings((s) => ({ ...s, overlayToastsEnabled: e.target.checked }))}
+                        checked={settings.overlayWindowEnabled}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setSettings((s) => {
+                            const next = { ...s, overlayWindowEnabled: checked };
+                            saveSettings(next);
+                            return next;
+                          });
+                        }}
                       />
-                      <span className="toggleLabel">{settings.overlayToastsEnabled ? "an" : "aus"}</span>
+                      <span className="toggleLabel">{settings.overlayWindowEnabled ? "an" : "aus"}</span>
                     </label>
                   </div>
 
                   <div className="field">
                     <label className="hint">
-                      Permanent Overlay (Übersicht): <span className="pill small">{settings.overviewOverlayEnabled ? "an" : "aus"}</span>
+                      Overlay Inhalt: <span className="pill small">{settings.overlayWindowMode}</span>
                     </label>
+                    <div className="toggleRow" style={{ marginBottom: 8 }}>
+                      <label className="toggle">
+                        <input
+                          type="radio"
+                          name="overlayMode"
+                          disabled={panicStopEnabled || !settings.overlayWindowEnabled}
+                          checked={settings.overlayWindowMode === "overview"}
+                          onChange={() =>
+                            setSettings((s) => {
+                              const next = { ...s, overlayWindowMode: "overview" };
+                              saveSettings(next);
+                              return next;
+                            })
+                          }
+                        />
+                        <span className="toggleLabel">Overview</span>
+                      </label>
+                      <label className="toggle">
+                        <input
+                          type="radio"
+                          name="overlayMode"
+                          disabled={panicStopEnabled || !settings.overlayWindowEnabled}
+                          checked={settings.overlayWindowMode === "toast"}
+                          onChange={() =>
+                            setSettings((s) => {
+                              const next = { ...s, overlayWindowMode: "toast" };
+                              saveSettings(next);
+                              return next;
+                            })
+                          }
+                        />
+                        <span className="toggleLabel">Toast</span>
+                      </label>
+                    </div>
                     <div className="toggleRow">
                       <label className="toggle">
                         <input
                           type="checkbox"
-                          disabled={panicStopEnabled}
-                          checked={settings.overviewOverlayCategories.legion}
+                          disabled={panicStopEnabled || !settings.overlayWindowEnabled}
+                          checked={settings.overlayWindowCategories.legion}
                           onChange={(e) => {
                             const checked = e.target.checked;
                             setSettings((s) => {
                               const next = {
                                 ...s,
-                                overviewOverlayCategories: { ...s.overviewOverlayCategories, legion: checked }
+                                overlayWindowCategories: { ...s.overlayWindowCategories, legion: checked }
                               };
                               saveSettings(next);
                               return next;
@@ -605,14 +629,14 @@ export default function App() {
                       <label className="toggle">
                         <input
                           type="checkbox"
-                          disabled={panicStopEnabled}
-                          checked={settings.overviewOverlayCategories.helltide}
+                          disabled={panicStopEnabled || !settings.overlayWindowEnabled}
+                          checked={settings.overlayWindowCategories.helltide}
                           onChange={(e) => {
                             const checked = e.target.checked;
                             setSettings((s) => {
                               const next = {
                                 ...s,
-                                overviewOverlayCategories: { ...s.overviewOverlayCategories, helltide: checked }
+                                overlayWindowCategories: { ...s.overlayWindowCategories, helltide: checked }
                               };
                               saveSettings(next);
                               return next;
@@ -624,14 +648,14 @@ export default function App() {
                       <label className="toggle">
                         <input
                           type="checkbox"
-                          disabled={panicStopEnabled}
-                          checked={settings.overviewOverlayCategories.world_boss}
+                          disabled={panicStopEnabled || !settings.overlayWindowEnabled}
+                          checked={settings.overlayWindowCategories.world_boss}
                           onChange={(e) => {
                             const checked = e.target.checked;
                             setSettings((s) => {
                               const next = {
                                 ...s,
-                                overviewOverlayCategories: { ...s.overviewOverlayCategories, world_boss: checked }
+                                overlayWindowCategories: { ...s.overlayWindowCategories, world_boss: checked }
                               };
                               saveSettings(next);
                               return next;
@@ -641,11 +665,19 @@ export default function App() {
                         <span className="toggleLabel">World Boss</span>
                       </label>
                     </div>
-                    <div className="actions" style={{ marginTop: 8 }}>
-                      <button className="btn" type="button" disabled={panicStopEnabled} onClick={() => void resetOverviewOverlayWindow()}>
-                        Übersicht zentrieren
-                      </button>
-                    </div>
+                  </div>
+
+                  <div className="inline">
+                    <div className="hint">Legacy: Win32 Toast</div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        disabled={panicStopEnabled}
+                        checked={settings.overlayToastsEnabled}
+                        onChange={(e) => setSettings((s) => ({ ...s, overlayToastsEnabled: e.target.checked }))}
+                      />
+                      <span className="toggleLabel">{settings.overlayToastsEnabled ? "an" : "aus"}</span>
+                    </label>
                   </div>
 
                   <div className="inline">
@@ -661,29 +693,27 @@ export default function App() {
                     </label>
                   </div>
 
-                <div className="inline">
-                  <div className="hint">Overlay Hintergrund</div>
-                  <div className="actions">
-                    <input
-                      type="color"
-                      value={settings.overlayBgHex}
-                      onChange={(e) => setSettings((s) => ({ ...s, overlayBgHex: e.target.value }))}
-                      title="Overlay Hintergrund"
-                    />
-                    <div className="pill">{settings.overlayBgHex}</div>
-                    <button className="btn" type="button" onClick={() => void startOverlayPositionMode()}>
-                      Position
-                    </button>
-                <button className="btn" type="button" onClick={() => void saveOverlayPosition()}>
-                  Speichern
-                </button>
-                <button className="btn" type="button" disabled={panicStopEnabled || !settings.overlayToastsEnabled} onClick={() => previewOverlayToast()}>
-                  Vorschau
-                </button>
-              </div>
-            </div>
+                  <div className="inline">
+                    <div className="hint">Overlay Look</div>
+                    <div className="actions">
+                      <input
+                        type="color"
+                        value={settings.overlayBgHex}
+                        onChange={(e) => setSettings((s) => ({ ...s, overlayBgHex: e.target.value }))}
+                        title="Overlay Hintergrund"
+                      />
+                      <div className="pill">{settings.overlayBgHex}</div>
+                      <button
+                        className="btn"
+                        type="button"
+                        disabled={panicStopEnabled || (!settings.overlayWindowEnabled && !settings.overlayToastsEnabled)}
+                        onClick={() => previewOverlayToast()}
+                      >
+                        Vorschau
+                      </button>
+                    </div>
+                  </div>
 
-                {overlaySavedAt ? <div className="hint">Gespeichert: {formatClock(overlaySavedAt)}</div> : null}
                 <div className="field">
                   <label>
                     Overlay Skalierung: <span className="pill">{Math.round(settings.overlayScale * 100)}%</span>

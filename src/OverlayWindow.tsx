@@ -191,6 +191,29 @@ export default function OverlayWindow() {
     return now - toast.shownAt < ms;
   }, [toast, now]);
 
+  useEffect(() => {
+    if (!isTauri()) return;
+    void (async () => {
+      try {
+        const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+        const win = getCurrentWebviewWindow();
+        if (settings.overlayWindowMode === "toast") {
+          if (toastVisible) {
+            await win.show();
+            await win.setAlwaysOnTop(true);
+          } else {
+            await win.hide();
+          }
+        } else {
+          await win.show();
+          await win.setAlwaysOnTop(true);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, [toastVisible, settings.overlayWindowMode]);
+
   return (
     <div
       className="container overlayOverview overlayHost"

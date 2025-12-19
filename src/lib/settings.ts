@@ -61,13 +61,13 @@ const defaults: Settings = {
   soundEnabled: true,
   autoRefreshEnabled: false,
   overlayToastsEnabled: false,
-  overviewOverlayEnabled: true,
+  overviewOverlayEnabled: false,
   overviewOverlayCategories: {
     helltide: true,
     legion: true,
     world_boss: true
   },
-  overlayWindowEnabled: false,
+  overlayWindowEnabled: true,
   overlayWindowMode: "overview",
   overlayWindowCategories: {
     helltide: true,
