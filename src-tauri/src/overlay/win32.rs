@@ -174,12 +174,6 @@ impl OverlayManager {
   }
 }
 
-fn set_last_error(shared: &Shared, msg: impl Into<String>) {
-  if let Ok(mut g) = shared.last_error.lock() {
-    *g = Some(msg.into());
-  }
-}
-
 fn clear_last_error(shared: &Shared) {
   if let Ok(mut g) = shared.last_error.lock() {
     *g = None;
@@ -236,7 +230,7 @@ fn run_overlay_thread(shared: Shared, hwnd_raw: Arc<AtomicIsize>, ready: std::sy
     let _ = ready.send(Ok(()));
 
     let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), 245, LWA_ALPHA);
-    ShowWindow(hwnd, SW_HIDE);
+    let _ = ShowWindow(hwnd, SW_HIDE);
 
     // also store initial position
     let mut rect = RECT::default();
@@ -250,7 +244,7 @@ fn run_overlay_thread(shared: Shared, hwnd_raw: Arc<AtomicIsize>, ready: std::sy
 
     let mut msg = MSG::default();
     while GetMessageW(&mut msg, None, 0, 0).into() {
-      TranslateMessage(&msg);
+      let _ = TranslateMessage(&msg);
       DispatchMessageW(&msg);
     }
 
@@ -335,9 +329,9 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         ex &= !(WS_EX_NOACTIVATE.0 as u32);
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex as isize);
         apply_position(hwnd, &ctx.shared);
-        ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
-        InvalidateRect(Some(hwnd), None, false.into());
+        let _ = InvalidateRect(Some(hwnd), None, false.into());
         if let Ok(mut v) = ctx.shared.visible.lock() {
           *v = true;
         }
@@ -351,7 +345,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         ex |= WS_EX_TRANSPARENT.0 as u32;
         ex |= WS_EX_NOACTIVATE.0 as u32;
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex as isize);
-        InvalidateRect(Some(hwnd), None, false.into());
+        let _ = InvalidateRect(Some(hwnd), None, false.into());
       }
       LRESULT(0)
     }
@@ -364,7 +358,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         clear_last_error(&ctx.shared);
         apply_position(hwnd, &ctx.shared);
         set_visible(hwnd, true, Some(ctx));
-        InvalidateRect(Some(hwnd), None, false.into());
+        let _ = InvalidateRect(Some(hwnd), None, false.into());
         let _ = SetTimer(Some(hwnd), TIMER_HIDE, 5200, None);
       }
       LRESULT(0)
@@ -389,10 +383,10 @@ unsafe fn get_ctx(hwnd: HWND) -> Option<&'static mut WindowCtx> {
 
 unsafe fn set_visible(hwnd: HWND, visible: bool, ctx: Option<&'static mut WindowCtx>) {
   if visible {
-    ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+    let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
     let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
   } else {
-    ShowWindow(hwnd, SW_HIDE);
+    let _ = ShowWindow(hwnd, SW_HIDE);
     let _ = KillTimer(Some(hwnd), TIMER_HIDE);
   }
 
@@ -416,7 +410,7 @@ unsafe fn paint(hwnd: HWND) {
 
   let ctx = get_ctx(hwnd);
   if ctx.is_none() {
-    EndPaint(hwnd, &ps);
+    let _ = EndPaint(hwnd, &ps);
     return;
   }
   let ctx = ctx.unwrap();
@@ -540,7 +534,7 @@ unsafe fn paint(hwnd: HWND) {
     DT_LEFT | DT_TOP | DT_END_ELLIPSIS | DT_NOPREFIX,
   );
 
-  EndPaint(hwnd, &ps);
+  let _ = EndPaint(hwnd, &ps);
 }
 
 fn mul_div(number: i32, numerator: i32, denominator: i32) -> i32 {
