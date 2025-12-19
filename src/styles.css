@@ -36,6 +36,12 @@ body {
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
 }
 
+body.overviewMode {
+  background: var(--bg);
+  background-repeat: no-repeat;
+  overflow: hidden;
+}
+
 a {
   color: inherit;
 }
@@ -645,4 +651,114 @@ input {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.overlayOverview {
+  max-width: none;
+  padding: 10px;
+}
+
+.overlayOverviewHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.overlayOverviewBrand {
+  font-weight: 850;
+  letter-spacing: 0.6px;
+  font-size: 12px;
+}
+
+.overlayOverviewMeta {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.overlayOverviewRows {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.overlayOverviewRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.overlayOverviewRow.helltide {
+  border-color: color-mix(in srgb, var(--helltide) 40%, var(--border));
+}
+
+.overlayOverviewRow.legion {
+  border-color: color-mix(in srgb, var(--legion) 40%, var(--border));
+}
+
+.overlayOverviewRow.world_boss {
+  border-color: color-mix(in srgb, var(--world_boss) 45%, var(--border));
+}
+
+.overlayOverviewTitle {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.overlayOverviewTitleMain {
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.overlayOverviewTitleSub {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.72);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.overlayOverviewRight {
+  flex: 0 0 auto;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.overlayOverviewCountdown {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.overlayOverviewTime {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.overlayOverviewError {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
 }

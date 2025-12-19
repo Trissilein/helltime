@@ -24,6 +24,7 @@ export type Settings = {
   soundEnabled: boolean;
   autoRefreshEnabled: boolean;
   overlayToastsEnabled: boolean;
+  overviewOverlayEnabled: boolean;
   overlayToastsPosition: { x: number; y: number } | null;
   overlayBgHex: string; // "#rrggbb"
   overlayScale: number; // 0.6-2.0
@@ -56,6 +57,7 @@ const defaults: Settings = {
   soundEnabled: true,
   autoRefreshEnabled: false,
   overlayToastsEnabled: false,
+  overviewOverlayEnabled: false,
   overlayToastsPosition: null,
   overlayBgHex: "#0b1220",
   overlayScale: 1,
@@ -168,6 +170,8 @@ export function loadSettings(): Settings {
       soundEnabled: typeof raw.soundEnabled === "boolean" ? raw.soundEnabled : defaults.soundEnabled,
       autoRefreshEnabled: typeof raw.autoRefreshEnabled === "boolean" ? raw.autoRefreshEnabled : defaults.autoRefreshEnabled,
       overlayToastsEnabled: typeof raw.overlayToastsEnabled === "boolean" ? raw.overlayToastsEnabled : defaults.overlayToastsEnabled,
+      overviewOverlayEnabled:
+        typeof raw.overviewOverlayEnabled === "boolean" ? raw.overviewOverlayEnabled : defaults.overviewOverlayEnabled,
       overlayToastsPosition: normalizePosition(raw.overlayToastsPosition),
       overlayBgHex: normalizeHexColor(raw.overlayBgHex, defaults.overlayBgHex),
       overlayScale: clampFloat(raw.overlayScale, defaults.overlayScale, 0.6, 2.0),
@@ -179,7 +183,7 @@ export function loadSettings(): Settings {
       }
     };
     if (isPanicStopEnabled()) {
-      return { ...base, overlayToastsEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+      return { ...base, overlayToastsEnabled: false, overviewOverlayEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
     }
     return base;
   }
@@ -194,6 +198,7 @@ export function loadSettings(): Settings {
       soundEnabled: defaults.soundEnabled,
       autoRefreshEnabled: defaults.autoRefreshEnabled,
       overlayToastsEnabled: typeof v4raw.overlayToastsEnabled === "boolean" ? v4raw.overlayToastsEnabled : defaults.overlayToastsEnabled,
+      overviewOverlayEnabled: defaults.overviewOverlayEnabled,
       overlayToastsPosition: normalizePosition(v4raw.overlayToastsPosition),
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
@@ -205,7 +210,7 @@ export function loadSettings(): Settings {
       }
     };
     if (isPanicStopEnabled()) {
-      return { ...base, overlayToastsEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+      return { ...base, overlayToastsEnabled: false, overviewOverlayEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
     }
     return base;
   }
@@ -219,6 +224,7 @@ export function loadSettings(): Settings {
       soundEnabled: defaults.soundEnabled,
       autoRefreshEnabled: defaults.autoRefreshEnabled,
       overlayToastsEnabled: defaults.overlayToastsEnabled,
+      overviewOverlayEnabled: defaults.overviewOverlayEnabled,
       overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
@@ -230,7 +236,7 @@ export function loadSettings(): Settings {
       }
     };
     if (isPanicStopEnabled()) {
-      return { ...base, overlayToastsEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+      return { ...base, overlayToastsEnabled: false, overviewOverlayEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
     }
     return base;
   }
@@ -248,6 +254,7 @@ export function loadSettings(): Settings {
       soundEnabled: defaults.soundEnabled,
       autoRefreshEnabled: defaults.autoRefreshEnabled,
       overlayToastsEnabled: defaults.overlayToastsEnabled,
+      overviewOverlayEnabled: defaults.overviewOverlayEnabled,
       overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
@@ -263,7 +270,7 @@ export function loadSettings(): Settings {
       }
     };
     if (isPanicStopEnabled()) {
-      return { ...base, overlayToastsEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+      return { ...base, overlayToastsEnabled: false, overviewOverlayEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
     }
     return base;
   }
@@ -282,6 +289,7 @@ export function loadSettings(): Settings {
       soundEnabled: defaults.soundEnabled,
       autoRefreshEnabled: defaults.autoRefreshEnabled,
       overlayToastsEnabled: defaults.overlayToastsEnabled,
+      overviewOverlayEnabled: defaults.overviewOverlayEnabled,
       overlayToastsPosition: defaults.overlayToastsPosition,
       overlayBgHex: defaults.overlayBgHex,
       overlayScale: defaults.overlayScale,
@@ -293,13 +301,13 @@ export function loadSettings(): Settings {
       }
     };
     if (isPanicStopEnabled()) {
-      return { ...base, overlayToastsEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+      return { ...base, overlayToastsEnabled: false, overviewOverlayEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
     }
     return base;
   }
 
   if (isPanicStopEnabled()) {
-    return { ...defaults, overlayToastsEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
+    return { ...defaults, overlayToastsEnabled: false, overviewOverlayEnabled: false, soundEnabled: false, autoRefreshEnabled: false };
   }
   return defaults;
 }

@@ -2,11 +2,9 @@ import { isTauri } from "@tauri-apps/api/core";
 
 type WindowBounds = { x: number; y: number; w: number; h: number };
 
-const KEY = "helltime:mainWindowBounds";
-
-function readBounds(): WindowBounds | null {
+function readBounds(storageKey: string): WindowBounds | null {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return null;
     const obj = JSON.parse(raw) as Partial<WindowBounds>;
     if (typeof obj.x !== "number" || typeof obj.y !== "number" || typeof obj.w !== "number" || typeof obj.h !== "number") return null;
@@ -17,21 +15,21 @@ function readBounds(): WindowBounds | null {
   }
 }
 
-function writeBounds(bounds: WindowBounds): void {
+function writeBounds(storageKey: string, bounds: WindowBounds): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(bounds));
+    localStorage.setItem(storageKey, JSON.stringify(bounds));
   } catch {
     // ignore
   }
 }
 
-export async function initMainWindowPersistence(): Promise<void> {
+export async function initWindowPersistence(storageKey: string): Promise<void> {
   if (!isTauri()) return;
   try {
     const { LogicalPosition, LogicalSize, getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
     const win = getCurrentWebviewWindow();
 
-    const saved = readBounds();
+    const saved = readBounds(storageKey);
     if (saved) {
       try {
         await win.setSize(new LogicalSize(saved.w, saved.h));
@@ -48,7 +46,7 @@ export async function initMainWindowPersistence(): Promise<void> {
         timer = null;
         try {
           const [pos, size] = await Promise.all([win.outerPosition(), win.outerSize()]);
-          writeBounds({ x: pos.x, y: pos.y, w: size.width, h: size.height });
+          writeBounds(storageKey, { x: pos.x, y: pos.y, w: size.width, h: size.height });
         } catch {
           // ignore
         }
@@ -71,3 +69,6 @@ export async function initMainWindowPersistence(): Promise<void> {
   }
 }
 
+export async function initMainWindowPersistence(): Promise<void> {
+  return initWindowPersistence("helltime:mainWindowBounds");
+}

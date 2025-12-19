@@ -8,6 +8,7 @@ import type { ScheduleResponse, ScheduleType, WorldBossScheduleItem } from "./li
 import { overlayEnterConfig, overlayExitConfig, overlayGetPosition, overlayShow } from "./lib/overlay";
 import { openExternalUrl } from "./lib/external";
 import { disablePanicStop, isPanicStopEnabled } from "./lib/safety";
+import { setOverviewOverlayEnabled } from "./lib/overview_window";
 
 type FiredMap = Record<string, number>;
 
@@ -135,6 +136,14 @@ export default function App() {
   useEffect(() => {
     saveSettings(settings);
   }, [settings]);
+
+  useEffect(() => {
+    if (panicStopEnabled) {
+      void setOverviewOverlayEnabled(false);
+      return;
+    }
+    void setOverviewOverlayEnabled(settings.overviewOverlayEnabled);
+  }, [settings.overviewOverlayEnabled, panicStopEnabled]);
 
   useEffect(() => {
     firedRef.current = pruneFired(firedRef.current, now);
@@ -518,6 +527,19 @@ export default function App() {
                   </div>
 
                   <div className="inline">
+                    <div className="hint">Overlay Übersicht (Topmost)</div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        disabled={panicStopEnabled}
+                        checked={settings.overviewOverlayEnabled}
+                        onChange={(e) => setSettings((s) => ({ ...s, overviewOverlayEnabled: e.target.checked }))}
+                      />
+                      <span className="toggleLabel">{settings.overviewOverlayEnabled ? "an" : "aus"}</span>
+                    </label>
+                  </div>
+
+                  <div className="inline">
                     <div className="hint">Ton</div>
                     <label className="toggle">
                       <input
@@ -545,14 +567,6 @@ export default function App() {
                     </button>
                 <button className="btn" type="button" onClick={() => void saveOverlayPosition()}>
                   Speichern
-                </button>
-                <button
-                  className="btn"
-                  type="button"
-                  disabled={panicStopEnabled}
-                  onClick={() => void showOverlayToast({ title: "helltime", body: "Overlay Toast Test", kind: "debug" })}
-                >
-                  Test
                 </button>
               </div>
             </div>
