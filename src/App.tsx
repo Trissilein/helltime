@@ -7,7 +7,15 @@ import { formatRemainingSpeech, speak } from "./lib/speech";
 import type { ScheduleResponse, ScheduleType, WorldBossScheduleItem } from "./lib/types";
 import { openExternalUrl } from "./lib/external";
 import { disablePanicStop, isPanicStopEnabled } from "./lib/safety";
-import { broadcastOverlayWindowSettings, ensureOverlayWindow, OVERLAY_WINDOW_LABEL, setOverlayWindowVisible } from "./lib/overlay_window";
+import {
+  broadcastOverlayWindowSettings,
+  ensureOverlayWindow,
+  getOverlayWindowDebugStatus,
+  OVERLAY_WINDOW_LABEL,
+  resetOverlayWindowBounds,
+  setOverlayWindowVisible
+} from "./lib/overlay_window";
+import { clearOverlayDiag, readOverlayDiag } from "./lib/overlay_diag";
 
 type FiredMap = Record<string, number>;
 
@@ -107,6 +115,7 @@ export default function App() {
   const [nextAutoRefreshAt, setNextAutoRefreshAt] = useState<number | null>(null);
   const autoRefreshTimeoutRef = useRef<number | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [overlayDebug, setOverlayDebug] = useState<string | null>(null);
   const [categoryOpen, setCategoryOpen] = useState<Record<ScheduleType, boolean>>(() => ({
     helltide: false,
     legion: false,
@@ -435,6 +444,18 @@ export default function App() {
     void showOverlayToast({ title, body, type: "helltide", kind: "debug" });
   }
 
+  async function refreshOverlayDebug(): Promise<void> {
+    const status = await getOverlayWindowDebugStatus();
+    const recent = readOverlayDiag().slice(-8);
+    const lines = [
+      `exists=${status.exists} visible=${status.visible} title=${status.title ?? "—"}`,
+      status.pos && status.size ? `pos=${status.pos.x},${status.pos.y} size=${status.size.w}x${status.size.h}` : "",
+      status.error ? `error=${status.error}` : "",
+      ...recent.map((e) => `${new Date(e.ts).toLocaleTimeString()} ${e.msg}`)
+    ].filter(Boolean);
+    setOverlayDebug(lines.join("\n"));
+  }
+
   return (
     <div className="container">
       <div className="header">
@@ -550,6 +571,28 @@ export default function App() {
                       <span className="toggleLabel">{settings.overlayWindowEnabled ? "an" : "aus"}</span>
                     </label>
                   </div>
+                  <div className="actions" style={{ marginTop: 8 }}>
+                    <button className="btn" type="button" disabled={panicStopEnabled} onClick={() => void refreshOverlayDebug()}>
+                      Overlay Debug
+                    </button>
+                    <button className="btn" type="button" disabled={panicStopEnabled} onClick={() => void resetOverlayWindowBounds()}>
+                      Zentrieren
+                    </button>
+                    <button
+                      className="btn"
+                      type="button"
+                      disabled={panicStopEnabled}
+                      onClick={() => {
+                        clearOverlayDiag();
+                        setOverlayDebug(null);
+                      }}
+                    >
+                      Logs leeren
+                    </button>
+                  </div>
+                  {overlayDebug ? (
+                    <pre className="overlayDebugBox">{overlayDebug}</pre>
+                  ) : null}
 
                   <div className="field">
                     <label className="hint">
