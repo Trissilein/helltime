@@ -178,7 +178,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!settings.autoRefreshEnabled) {
+    if (panicStopEnabled || !settings.autoRefreshEnabled) {
       if (autoRefreshTimeoutRef.current) window.clearTimeout(autoRefreshTimeoutRef.current);
       autoRefreshTimeoutRef.current = null;
       setNextAutoRefreshAt(null);
@@ -191,14 +191,14 @@ export default function App() {
       autoRefreshTimeoutRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.autoRefreshEnabled]);
+  }, [settings.autoRefreshEnabled, panicStopEnabled]);
 
   useEffect(() => {
-    if (!settings.autoRefreshEnabled) return;
+    if (panicStopEnabled || !settings.autoRefreshEnabled) return;
     if (!lastRefreshAt) return;
     scheduleNextAutoRefresh(lastRefreshAt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastRefreshAt]);
+  }, [lastRefreshAt, panicStopEnabled]);
 
   const nextByType = useMemo(() => {
     if (!schedule) return null;
@@ -286,7 +286,7 @@ export default function App() {
         }
       }
     }
-  }, [schedule, now, settings]);
+  }, [schedule, now, settings, panicStopEnabled]);
 
   function setCategoryEnabled(type: ScheduleType, enabled: boolean) {
     if (!enabled) setCategoryOpen((s) => ({ ...s, [type]: false }));
@@ -630,6 +630,7 @@ export default function App() {
                               className="btn"
                               type="button"
                               onClick={() => {
+                                if (panicStopEnabled) return;
                                 if (!settings.soundEnabled) return;
                                 const beepMs = playBeep(timer.beepPattern, timer.pitchHz, settings.volume);
                                 if (timer.ttsEnabled) {
@@ -692,6 +693,7 @@ export default function App() {
                                   title="Ton testen"
                                   disabled={!settings.soundEnabled}
                                   onClick={() => {
+                                    if (panicStopEnabled) return;
                                     if (!settings.soundEnabled) return;
                                     playBeep(timer.beepPattern, timer.pitchHz, settings.volume);
                                   }}
