@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { isTauri } from "@tauri-apps/api/core";
 import App from "./App";
 import OverlayWindow from "./OverlayWindow";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -18,6 +19,26 @@ if (view !== "overlay") {
   });
 }
 
+if (view !== "overlay" && isTauri()) {
+  void (async () => {
+    try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+      const main = getCurrentWindow();
+      await main.onCloseRequested(async () => {
+        try {
+          const overlay = await WebviewWindow.getByLabel("overlay");
+          await overlay?.destroy();
+        } catch {
+          // ignore
+        }
+      });
+    } catch {
+      // ignore
+    }
+  })();
+}
+
 if (view === "overlay") {
   void initWindowPersistence("helltime:overlayWindowBounds");
 } else {
@@ -26,9 +47,5 @@ if (view === "overlay") {
 }
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      {view === "overlay" ? <OverlayWindow /> : <App />}
-    </ErrorBoundary>
-  </React.StrictMode>
+  <ErrorBoundary>{view === "overlay" ? <OverlayWindow /> : <App />}</ErrorBoundary>
 );

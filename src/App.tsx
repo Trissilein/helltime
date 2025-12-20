@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { isTauri } from "@tauri-apps/api/core";
 import { fetchSchedule } from "./lib/helltides";
 import { formatCountdown, formatLocalTime } from "./lib/time";
 import { loadSettings, saveSettings, type BeepPattern, type Settings, type TimerSettings } from "./lib/settings";
 import { playBeep } from "./lib/sound";
 import { formatRemainingSpeech, speak } from "./lib/speech";
 import type { ScheduleResponse, ScheduleType, WorldBossScheduleItem } from "./lib/types";
-import { openExternalUrl } from "./lib/external";
 import { disablePanicStop, isPanicStopEnabled } from "./lib/safety";
 import {
   broadcastOverlayWindowSettings,
@@ -13,6 +13,7 @@ import {
   getOverlayWindowDebugStatus,
   OVERLAY_WINDOW_LABEL,
   resetOverlayWindowBounds,
+  setOverlayWindowInteractive,
   setOverlayWindowVisible
 } from "./lib/overlay_window";
 import { clearOverlayDiag, readOverlayDiag } from "./lib/overlay_diag";
@@ -91,17 +92,41 @@ function getEventName(type: ScheduleType, item: { startTime: string } | null): s
   return typeLabel(type);
 }
 
-function getSpokenEventName(type: ScheduleType, item: { startTime: string } | null): string {
-  if (!item) return spokenTypeLabel(type);
+function getEventTitleParts(type: ScheduleType, item: { startTime: string } | null): { title: string; subtitle?: string } {
+  if (!item) return { title: typeLabel(type) };
   if (type === "world_boss") {
     const boss = (item as WorldBossScheduleItem).boss;
-    return boss ? `${spokenTypeLabel(type)} ${boss}` : spokenTypeLabel(type);
+    return boss ? { title: "World Boss", subtitle: boss } : { title: "World Boss" };
   }
-  return spokenTypeLabel(type);
+  return { title: typeLabel(type) };
+}
+
+function getSpokenEventNameWithTemplate(
+  type: ScheduleType,
+  item: { startTime: string } | null,
+  template: string | null | undefined
+): string {
+  const base = (template ?? "").trim() || spokenTypeLabel(type);
+  if (type !== "world_boss") return base;
+  const boss = item ? (item as WorldBossScheduleItem).boss : null;
+  if (!boss) return base.replaceAll("{boss}", "").replaceAll("  ", " ").trim();
+  if (base.includes("{boss}")) return base.replaceAll("{boss}", boss).replaceAll("  ", " ").trim();
+  return `${base} ${boss}`.trim();
 }
 
 function clampInt(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.round(n)));
+}
+
+const OPACITY_GAMMA = 2.6;
+function opacityToSlider(alpha: number): number {
+  const a = Math.max(0, Math.min(1, alpha));
+  return clampInt(Math.round(Math.pow(a, 1 / OPACITY_GAMMA) * 100), 0, 100);
+}
+
+function sliderToOpacity(slider: number): number {
+  const t = Math.max(0, Math.min(100, slider)) / 100;
+  return Math.max(0, Math.min(1, Math.pow(t, OPACITY_GAMMA)));
 }
 
 const types: ScheduleType[] = ["helltide", "legion", "world_boss"];
@@ -109,18 +134,15 @@ const types: ScheduleType[] = ["helltide", "legion", "world_boss"];
 export default function App() {
   const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [lastRefreshAt, setLastRefreshAt] = useState<number | null>(null);
   const [nextAutoRefreshAt, setNextAutoRefreshAt] = useState<number | null>(null);
   const autoRefreshTimeoutRef = useRef<number | null>(null);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const refreshInFlightRef = useRef(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [debugOpen, setDebugOpen] = useState(false);
   const [overlayDebug, setOverlayDebug] = useState<string | null>(null);
-  const [categoryOpen, setCategoryOpen] = useState<Record<ScheduleType, boolean>>(() => ({
-    helltide: false,
-    legion: false,
-    world_boss: false
-  }));
+  const [openCategory, setOpenCategory] = useState<ScheduleType | null>(null);
   const [panicStopEnabled, setPanicStopEnabled] = useState(() => isPanicStopEnabled());
 
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
@@ -141,6 +163,51 @@ export default function App() {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
+
+  const categoryLayoutKey = useMemo(() => {
+    return types
+      .map((t) => {
+        const c = settings.categories[t];
+        return `${t}:${c.enabled ? 1 : 0}:${c.timerCount}`;
+      })
+      .join("|");
+  }, [settings]);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    if (settingsOpen) return;
+    if (panicStopEnabled) return;
+
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const { getCurrentWindow } = await import("@tauri-apps/api/window");
+          const { LogicalSize } = await import("@tauri-apps/api/dpi");
+          const win = getCurrentWindow();
+          const current = await win.innerSize();
+          const factor = await win.scaleFactor();
+          const logical = current.toLogical(factor);
+
+          const desired = clampInt(Math.ceil(document.documentElement.scrollHeight) + 8, 520, 920);
+          if (Math.abs(desired - current.height) <= 24) return;
+          await win.setSize(new LogicalSize(logical.width, desired));
+        } catch {
+          // ignore
+        }
+      })();
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [openCategory, categoryLayoutKey, settingsOpen, panicStopEnabled]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSettingsOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [settingsOpen]);
 
   useEffect(() => {
     const onPanic = (e: Event) => {
@@ -170,8 +237,15 @@ export default function App() {
       return;
     }
 
-    void ensureOverlayWindow();
-    void setOverlayWindowVisible(true);
+    void (async () => {
+      await ensureOverlayWindow();
+      if (settings.overlayWindowMode === "overview") {
+        await setOverlayWindowVisible(true);
+      } else {
+        // toast mode: keep it hidden until a toast arrives
+        await setOverlayWindowVisible(false);
+      }
+    })();
   }, [settings.overlayWindowEnabled, settings.overlayWindowMode, panicStopEnabled]);
 
   useEffect(() => {
@@ -180,7 +254,8 @@ export default function App() {
   }, [now]);
 
   async function refresh() {
-    setLoading(true);
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
     setError(null);
     try {
       const data = await fetchSchedule();
@@ -192,7 +267,7 @@ export default function App() {
     } catch (e) {
       setError(String(e));
     } finally {
-      setLoading(false);
+      refreshInFlightRef.current = false;
     }
   }
 
@@ -216,7 +291,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (panicStopEnabled || !settings.autoRefreshEnabled) {
+    if (panicStopEnabled) {
       if (autoRefreshTimeoutRef.current) window.clearTimeout(autoRefreshTimeoutRef.current);
       autoRefreshTimeoutRef.current = null;
       setNextAutoRefreshAt(null);
@@ -229,10 +304,10 @@ export default function App() {
       autoRefreshTimeoutRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.autoRefreshEnabled, panicStopEnabled]);
+  }, [panicStopEnabled]);
 
   useEffect(() => {
-    if (panicStopEnabled || !settings.autoRefreshEnabled) return;
+    if (panicStopEnabled) return;
     if (!lastRefreshAt) return;
     scheduleNextAutoRefresh(lastRefreshAt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -259,7 +334,7 @@ export default function App() {
         return a.startMs - b.startMs;
       })
       .map((x) => x.type);
-  }, [nextByType, settings]);
+  }, [nextByType]);
 
   const nextEnabledOverall = useMemo(() => {
     if (!nextByType) return null;
@@ -294,7 +369,7 @@ export default function App() {
       const startMs = new Date(next.startTime).getTime();
       const remainingMs = startMs - now;
       const title = getEventName(type, next);
-      const spokenTitle = getSpokenEventName(type, next);
+      const spokenTitle = getSpokenEventNameWithTemplate(type, next, category.ttsName);
       const timeLabel = formatLocalTime(next.startTime);
 
       for (let i = 0; i < category.timerCount; i++) {
@@ -308,7 +383,7 @@ export default function App() {
         firedRef.current[key] = now;
         saveFired(firedRef.current);
 
-        const body = `Start in ${formatCountdown(Math.max(0, remainingMs))} • ${timeLabel}`;
+        const body = formatCountdown(Math.max(0, remainingMs));
         void showOverlayToast({ title, body, type, kind: "event" });
 
         if (!settings.soundEnabled) continue;
@@ -347,9 +422,9 @@ export default function App() {
               saveFired(firedRef.current);
 
               const title = getEventName(type, next);
-              const spokenTitle = getSpokenEventName(type, next);
+              const spokenTitle = getSpokenEventNameWithTemplate(type, next, category.ttsName);
               const timeLabel = formatLocalTime(next.startTime);
-              const body = `Start in ${formatCountdown(Math.max(0, remainingMs))} • ${timeLabel}`;
+              const body = formatCountdown(Math.max(0, remainingMs));
               void showOverlayToast({ title, body, type, kind: "event" });
 
               if (settings.soundEnabled) {
@@ -366,7 +441,7 @@ export default function App() {
       }
     }
 
-    if (!enabled) setCategoryOpen((s) => ({ ...s, [type]: false }));
+    if (!enabled && openCategory === type) setOpenCategory(null);
     updateSettings((s) => ({
       ...s,
       categories: {
@@ -416,13 +491,22 @@ export default function App() {
     if (settings.overlayWindowEnabled) {
       try {
         await ensureOverlayWindow();
+        if (settings.overlayWindowMode === "toast") {
+          await setOverlayWindowVisible(true);
+        }
         const { emitTo } = await import("@tauri-apps/api/event");
+        const durationMs = payload.kind === "debug" ? 8000 : 5200;
         await emitTo(OVERLAY_WINDOW_LABEL, "helltime:toast", {
           title: payload.title,
           body: payload.body,
           type: payload.type,
-          durationMs: payload.kind === "debug" ? 8000 : 5200
+          durationMs
         });
+        if (settings.overlayWindowMode === "toast") {
+          window.setTimeout(() => {
+            void setOverlayWindowVisible(false);
+          }, durationMs + 50);
+        }
       } catch (e) {
         console.warn("emitTo overlay failed", e);
       }
@@ -440,7 +524,7 @@ export default function App() {
     if (panicStopEnabled) return;
     if (!settings.overlayWindowEnabled) return;
     const title = "Overlay Vorschau";
-    const body = `Skalierung ${Math.round(settings.overlayScale * 100)}% • ${settings.overlayBgHex}`;
+    const body = "00:30";
     void showOverlayToast({ title, body, type: "helltide", kind: "debug" });
   }
 
@@ -456,6 +540,31 @@ export default function App() {
     setOverlayDebug(lines.join("\n"));
   }
 
+  async function bringOverlayToFront(): Promise<void> {
+    if (panicStopEnabled) return;
+    try {
+      const until = Date.now() + 15_000;
+      try {
+        localStorage.setItem("helltime:overlayPositioningUntil", String(until));
+      } catch {
+        // ignore
+      }
+      await setOverlayWindowVisible(true);
+      await setOverlayWindowInteractive(true);
+      window.setTimeout(() => {
+        try {
+          localStorage.setItem("helltime:overlayPositioningUntil", "0");
+        } catch {
+          // ignore
+        }
+        void setOverlayWindowInteractive(false);
+      }, 15_000);
+      setOverlayDebug("Overlay ist 15s anklickbar (Positionieren). Danach wird es wieder klick-durch.");
+    } catch (e) {
+      setOverlayDebug(`Overlay nach vorne fehlgeschlagen: ${String(e)}`);
+    }
+  }
+
   return (
     <div className="container">
       <div className="header">
@@ -464,140 +573,96 @@ export default function App() {
             <span className="brandMain">hell</span>
             <span className="brandAccent">time</span>
           </h1>
-          <p>Helltide • Legion • World Boss</p>
+          <p>Event Timers</p>
         </div>
         <div className="actions">
           <div className="actionStack">
             <div className="actionRow">
-              <button className="btn" onClick={() => void refresh()} disabled={loading}>
-                {loading ? "Lade…" : "Refresh"}
-              </button>
-              <label className="toggle">
-                <input
-                  type="checkbox"
-                  disabled={panicStopEnabled}
-                  checked={settings.autoRefreshEnabled}
-                  onChange={(e) => updateSettings((s) => ({ ...s, autoRefreshEnabled: e.target.checked }))}
-                />
-                <span className="toggleLabel">Auto</span>
-              </label>
-              <label className="toggle">
-                <input
-                  type="checkbox"
-                  disabled={panicStopEnabled}
-                  checked={settings.overlayWindowEnabled}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    updateSettings((s) => ({ ...s, overlayWindowEnabled: checked }));
-                  }}
-                />
-                <span className="toggleLabel">Overlay</span>
-              </label>
-              <button className="btn primary" type="button" onClick={() => void openExternalUrl("https://helltides.com")}>
-                Quelle
+              <button
+                className="iconBtn"
+                type="button"
+                aria-label="Einstellungen"
+                title="Einstellungen"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <path
+                    fill="currentColor"
+                    d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.06 7.06 0 0 0-1.63-.94l-.36-2.54A.5.5 0 0 0 13.9 1h-3.8a.5.5 0 0 0-.49.42l-.36 2.54c-.58.23-1.12.54-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 7.48a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.82 14.5a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.5.4 1.05.71 1.63.94l.36 2.54c.04.24.25.42.49.42h3.8c.24 0 .45-.18.49-.42l.36-2.54c.58-.23 1.12-.54 1.63-.94l2.39.96c.22.09.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.56ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"
+                  />
+                </svg>
               </button>
             </div>
             <div className="subNote">
               Letztes Update: {lastRefreshAt ? formatClock(lastRefreshAt) : "—"}
-              {settings.autoRefreshEnabled && nextAutoRefreshAt ? ` • Auto in ${formatCountdown(nextAutoRefreshAt - now)}` : ""}
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid">
-        <div className="card span12">
-          <h2>Intro & Settings</h2>
-          <div className="form">
-            {panicStopEnabled ? (
-              <div className="warning">
-                <div>
-                  <div className="warningTitle">Sicherheits-Stopp aktiv</div>
-                  <div className="warningBody">Overlay/Ton/Auto sind pausiert (UI-Fehler erkannt).</div>
-                </div>
-                <div className="actions">
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => {
-                      disablePanicStop();
-                      window.location.reload();
-                    }}
-                  >
-                    Reset
-                  </button>
-                </div>
-              </div>
-            ) : null}
-            <div className="inline">
-              <div className="hint">Nächstes Event (aktivierte Kategorien)</div>
-              {(() => {
-                const label = nextEnabledOverall ? `${nextEnabledOverall.name} • ${formatLocalTime(nextEnabledOverall.startTime)}` : "—";
-                return (
-                  <div className="pill pillClamp" title={label}>
-                    {label}
-                  </div>
-                );
-              })()}
-            </div>
-            <div className={`section ${notificationsOpen ? "open" : ""}`}>
-              <div className="panelHeaderRow">
-                <button
-                  className="panelHeaderBtn"
-                  type="button"
-                  aria-expanded={notificationsOpen}
-                  onClick={() => setNotificationsOpen((v) => !v)}
-                >
-                  <span className="panelHeaderTitle">Benachrichtigungen</span>
-                </button>
-                <div className="panelHeaderRight">
-                  <div className="pill small">Overlay + Ton</div>
-                </div>
-              </div>
-              {notificationsOpen ? (
-                <div className="sectionBody">
-                  <div className="inline">
-                    <div className="hint">Overlay (Tauri Window)</div>
-                    <label className="toggle">
-                      <input
-                        type="checkbox"
-                        disabled={panicStopEnabled}
-                        checked={settings.overlayWindowEnabled}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          updateSettings((s) => ({ ...s, overlayWindowEnabled: checked }));
-                        }}
-                      />
-                      <span className="toggleLabel">{settings.overlayWindowEnabled ? "an" : "aus"}</span>
-                    </label>
-                  </div>
-                  <div className="actions" style={{ marginTop: 8 }}>
-                    <button className="btn" type="button" disabled={panicStopEnabled} onClick={() => void refreshOverlayDebug()}>
-                      Overlay Debug
-                    </button>
-                    <button className="btn" type="button" disabled={panicStopEnabled} onClick={() => void resetOverlayWindowBounds()}>
-                      Zentrieren
-                    </button>
-                    <button
-                      className="btn"
-                      type="button"
-                      disabled={panicStopEnabled}
-                      onClick={() => {
-                        clearOverlayDiag();
-                        setOverlayDebug(null);
-                      }}
-                    >
-                      Logs leeren
-                    </button>
-                  </div>
-                  {overlayDebug ? (
-                    <pre className="overlayDebugBox">{overlayDebug}</pre>
-                  ) : null}
+      {panicStopEnabled ? (
+        <div className="warning" style={{ marginTop: 10 }}>
+          <div>
+            <div className="warningTitle">Sicherheits-Stopp aktiv</div>
+            <div className="warningBody">Overlay/Ton/Auto sind pausiert (UI-Fehler erkannt).</div>
+          </div>
+          <div className="actions">
+            <button
+              className="btn"
+              type="button"
+              onClick={() => {
+                disablePanicStop();
+                window.location.reload();
+              }}
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+      ) : null}
 
-                  <div className="field">
-                    <label className="hint">
-                      Overlay Inhalt: <span className="pill small">{settings.overlayWindowMode}</span>
-                    </label>
+      {error ? (
+        <div className="errorBanner" style={{ marginTop: 10 }}>
+          Fehler: {error}
+        </div>
+      ) : null}
+
+      {settingsOpen ? (
+        <div
+          className="modalBackdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Einstellungen"
+          onMouseDown={() => setSettingsOpen(false)}
+        >
+          <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modalHeader">
+              <div className="modalTitle">Einstellungen</div>
+              <button className="iconBtn" type="button" aria-label="Schließen" title="Schließen" onClick={() => setSettingsOpen(false)}>
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <path
+                    fill="currentColor"
+                    d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 0 0 5.7 7.11L10.59 12l-4.9 4.89a1 1 0 1 0 1.41 1.42L12 13.41l4.89 4.9a1 1 0 0 0 1.42-1.41L13.41 12l4.9-4.89a1 1 0 0 0-.01-1.4Z"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div className="modalBody">
+              <div className="form">
+	                <div className="settingsBlock">
+	                  <div className="sectionTitle">Overlay</div>
+	
+	                  <div className="inline">
+	                    <div className="hint">Overlay</div>
+	                    <div className="pill small">{settings.overlayWindowEnabled ? "an" : "aus"}</div>
+	                  </div>
+	                  <div className="hint">An/Aus und Position unten rechts im Hauptfenster.</div>
+	
+	                  <div className="field">
+	                    <label className="hint">
+	                      Inhalt <span className="pill small">{settings.overlayWindowMode}</span>
+	                    </label>
                     <div className="toggleRow" style={{ marginBottom: 8 }}>
                       <label className="toggle">
                         <input
@@ -626,13 +691,12 @@ export default function App() {
                           type="checkbox"
                           disabled={panicStopEnabled || !settings.overlayWindowEnabled}
                           checked={settings.overlayWindowCategories.legion}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
+                          onChange={(e) =>
                             updateSettings((s) => ({
                               ...s,
-                              overlayWindowCategories: { ...s.overlayWindowCategories, legion: checked }
-                            }));
-                          }}
+                              overlayWindowCategories: { ...s.overlayWindowCategories, legion: e.target.checked }
+                            }))
+                          }
                         />
                         <span className="toggleLabel">Legion</span>
                       </label>
@@ -641,13 +705,12 @@ export default function App() {
                           type="checkbox"
                           disabled={panicStopEnabled || !settings.overlayWindowEnabled}
                           checked={settings.overlayWindowCategories.helltide}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
+                          onChange={(e) =>
                             updateSettings((s) => ({
                               ...s,
-                              overlayWindowCategories: { ...s.overlayWindowCategories, helltide: checked }
-                            }));
-                          }}
+                              overlayWindowCategories: { ...s.overlayWindowCategories, helltide: e.target.checked }
+                            }))
+                          }
                         />
                         <span className="toggleLabel">Helltide</span>
                       </label>
@@ -656,13 +719,12 @@ export default function App() {
                           type="checkbox"
                           disabled={panicStopEnabled || !settings.overlayWindowEnabled}
                           checked={settings.overlayWindowCategories.world_boss}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
+                          onChange={(e) =>
                             updateSettings((s) => ({
                               ...s,
-                              overlayWindowCategories: { ...s.overlayWindowCategories, world_boss: checked }
-                            }));
-                          }}
+                              overlayWindowCategories: { ...s.overlayWindowCategories, world_boss: e.target.checked }
+                            }))
+                          }
                         />
                         <span className="toggleLabel">World Boss</span>
                       </label>
@@ -670,20 +732,7 @@ export default function App() {
                   </div>
 
                   <div className="inline">
-                    <div className="hint">Ton</div>
-                    <label className="toggle">
-                      <input
-                        type="checkbox"
-                        disabled={panicStopEnabled}
-                        checked={settings.soundEnabled}
-                        onChange={(e) => updateSettings((s) => ({ ...s, soundEnabled: e.target.checked }))}
-                      />
-                      <span className="toggleLabel">{settings.soundEnabled ? "an" : "aus"}</span>
-                    </label>
-                  </div>
-
-                  <div className="inline">
-                    <div className="hint">Overlay Look</div>
+                    <div className="hint">Look</div>
                     <div className="actions">
                       <input
                         type="color"
@@ -700,74 +749,152 @@ export default function App() {
                       >
                         Vorschau
                       </button>
+                      <button
+                        className="btn"
+                        type="button"
+                        disabled={panicStopEnabled}
+                        onClick={() => void resetOverlayWindowBounds()}
+                      >
+                        Reset
+                      </button>
                     </div>
+	                  </div>
+	
+	                  <div className="field">
+	                    <label>
+	                      Breite <span className="pill">{Math.round(settings.overlayScaleX * 100)}%</span>
+	                    </label>
+	                    <input
+	                      type="range"
+	                      min={60}
+	                      max={200}
+	                      step={5}
+	                      value={Math.round(settings.overlayScaleX * 100)}
+	                      onChange={(e) =>
+	                        updateSettings((s) => ({
+	                          ...s,
+	                          overlayScaleX: clampInt(Number(e.target.value), 60, 200) / 100
+	                        }))
+	                      }
+	                    />
+	                  </div>
+	
+	                  <div className="field">
+	                    <label>
+	                      Höhe <span className="pill">{Math.round(settings.overlayScaleY * 100)}%</span>
+	                    </label>
+	                    <input
+	                      type="range"
+	                      min={60}
+	                      max={200}
+	                      step={5}
+	                      value={Math.round(settings.overlayScaleY * 100)}
+	                      onChange={(e) =>
+	                        updateSettings((s) => ({
+	                          ...s,
+	                          overlayScaleY: clampInt(Number(e.target.value), 60, 200) / 100
+	                        }))
+	                      }
+	                    />
+	                  </div>
+	
+	                  <div className="field">
+	                    <label>
+	                      Hintergrund-Transparenz <span className="pill">{Math.round(settings.overlayBgOpacity * 100)}%</span>
+	                    </label>
+	                    <input
+	                      type="range"
+	                      min={0}
+	                      max={100}
+	                      step={1}
+	                      value={opacityToSlider(settings.overlayBgOpacity)}
+	                      onChange={(e) =>
+	                        updateSettings((s) => ({
+	                          ...s,
+	                          overlayBgOpacity: sliderToOpacity(clampInt(Number(e.target.value), 0, 100))
+	                        }))
+	                      }
+	                    />
+	                  </div>
+	                </div>
+
+                <div className="settingsBlock">
+                  <div className="sectionTitle">Ton</div>
+
+                  <div className="inline">
+                    <div className="hint">Benachrichtigungs-Ton</div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        disabled={panicStopEnabled}
+                        checked={settings.soundEnabled}
+                        onChange={(e) => updateSettings((s) => ({ ...s, soundEnabled: e.target.checked }))}
+                      />
+                      <span className="toggleLabel">{settings.soundEnabled ? "an" : "aus"}</span>
+                    </label>
                   </div>
 
-                <div className="field">
-                  <label>
-                    Overlay Skalierung: <span className="pill">{Math.round(settings.overlayScale * 100)}%</span>
-                  </label>
-                  <input
-                    type="range"
-                    min={60}
-                    max={200}
-                    step={5}
-                    value={Math.round(settings.overlayScale * 100)}
-                    onChange={(e) =>
-                      updateSettings((s) => ({
-                        ...s,
-                        overlayScale: clampInt(Number(e.target.value), 60, 200) / 100
-                      }))
-                    }
-                  />
+                  <div className="field">
+                    <label>
+                      Lautstärke <span className="pill">{Math.round(settings.volume * 100)}%</span>
+                    </label>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      disabled={!settings.soundEnabled}
+                      value={Math.round(settings.volume * 100)}
+                      onChange={(e) => updateSettings((s) => ({ ...s, volume: clampInt(Number(e.target.value), 0, 100) / 100 }))}
+                      onPointerUp={(e) => testVolumeBeep(clampInt(Number(e.currentTarget.value), 0, 100) / 100)}
+                      onKeyUp={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          const target = e.currentTarget as HTMLInputElement;
+                          testVolumeBeep(clampInt(Number(target.value), 0, 100) / 100);
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="field">
-                  <label>
-                    Overlay Hintergrund-Transparenz: <span className="pill">{Math.round(settings.overlayBgOpacity * 100)}%</span>
-                  </label>
-                  <input
-                    type="range"
-                    min={20}
-                    max={100}
-                    step={5}
-                    value={Math.round(settings.overlayBgOpacity * 100)}
-                    onChange={(e) =>
-                      updateSettings((s) => ({
-                        ...s,
-                        overlayBgOpacity: clampInt(Number(e.target.value), 20, 100) / 100
-                      }))
-                    }
-                  />
+
+                <div className="modalFooter">
+                  <button className="btn small" type="button" onClick={() => setDebugOpen((v) => !v)} aria-expanded={debugOpen}>
+                    Debug
+                  </button>
                 </div>
-                <div className="field">
-                  <label>
-                    Lautstärke: <span className="pill">{Math.round(settings.volume * 100)}%</span>
-                  </label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={1}
-                    disabled={!settings.soundEnabled}
-                    value={Math.round(settings.volume * 100)}
-                    onChange={(e) => updateSettings((s) => ({ ...s, volume: clampInt(Number(e.target.value), 0, 100) / 100 }))}
-                    onPointerUp={(e) => testVolumeBeep(clampInt(Number(e.currentTarget.value), 0, 100) / 100)}
-                    onKeyUp={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        const target = e.currentTarget as HTMLInputElement;
-                        testVolumeBeep(clampInt(Number(target.value), 0, 100) / 100);
-                      }
-                    }}
-                  />
-                </div>
-                </div>
-              ) : null}
+
+                {debugOpen ? (
+                  <div className="settingsBlock">
+                    <div className="sectionTitle">Debug</div>
+                    <div className="actions">
+                      <button className="btn" type="button" disabled={panicStopEnabled} onClick={() => void refreshOverlayDebug()}>
+                        Overlay Status
+                      </button>
+                      <button
+                        className="btn"
+                        type="button"
+                        disabled={panicStopEnabled}
+                        onClick={() => {
+                          clearOverlayDiag();
+                          setOverlayDebug(null);
+                        }}
+                      >
+                        Logs leeren
+                      </button>
+                      <button className="btn" type="button" disabled={panicStopEnabled} onClick={() => void bringOverlayToFront()}>
+                        Positionieren
+                      </button>
+                    </div>
+                    {overlayDebug ? <pre className="overlayDebugBox">{overlayDebug}</pre> : null}
+                  </div>
+                ) : null}
+              </div>
             </div>
-            <div className="hint">Kategorien aktivieren und Timer pro Kategorie konfigurieren.</div>
-            {error ? <div className="error">Fehler: {error}</div> : null}
           </div>
         </div>
+      ) : null}
 
+      <div className="grid">
         {orderedTypes.map((type) => {
           const category = settings.categories[type];
           const next = nextByType ? nextByType[type] : null;
@@ -775,9 +902,10 @@ export default function App() {
           const countdown = nextStartMs ? formatCountdown(nextStartMs - now) : "—";
           const timeLabel = next ? formatLocalTime(next.startTime) : "—";
           const name = getEventName(type, next);
-          const spokenName = getSpokenEventName(type, next);
+          const titleParts = getEventTitleParts(type, next);
+          const spokenName = getSpokenEventNameWithTemplate(type, next, category.ttsName);
 
-          const isOpen = category.enabled && categoryOpen[type];
+          const isOpen = category.enabled && openCategory === type;
 
           return (
             <div className={`card span12 categoryCard ${type} categoryDetails ${isOpen ? "open" : ""}`} key={type}>
@@ -789,11 +917,12 @@ export default function App() {
                   aria-expanded={isOpen}
                   onClick={() => {
                     if (!category.enabled) return;
-                    setCategoryOpen((s) => ({ ...s, [type]: !s[type] }));
+                    setOpenCategory((prev) => (prev === type ? null : type));
                   }}
                 >
-                  <span className="panelHeaderTitle" title={name}>
-                    {name}
+                  <span className="panelHeaderTitle categoryTitle" title={name}>
+                    <span className="categoryTitleMain">{titleParts.title}</span>
+                    <span className={`categoryTitleSub ${titleParts.subtitle ? "" : "placeholder"}`}>{titleParts.subtitle ?? "—"}</span>
                   </span>
                   <span className="panelHeaderMeta">{countdown}</span>
                 </button>
@@ -826,8 +955,36 @@ export default function App() {
                       </select>
                     </div>
 
+                    <div className="field">
+                      <label>
+                        TTS Name <span className="pill small">{typeLabel(type)}</span>
+                      </label>
+                      <input
+                        className="textInput"
+                        type="text"
+                        value={category.ttsName}
+                        placeholder={spokenTypeLabel(type) + (type === "world_boss" ? " {boss}" : "")}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          updateSettings((s) => ({
+                            ...s,
+                            categories: {
+                              ...s.categories,
+                              [type]: { ...s.categories[type], ttsName: value }
+                            }
+                          }));
+                        }}
+                      />
+                      {type === "world_boss" ? (
+                        <div className="hint">
+                          Optional: Platzhalter <span className="pill small">{"{boss}"}</span>.
+                        </div>
+                      ) : null}
+                    </div>
+
                     {Array.from({ length: category.timerCount }).map((_, i) => {
                       const timer = category.timers[i];
+                      if (!timer) return null;
 
                       return (
                         <div className="level" key={i}>
@@ -932,6 +1089,26 @@ export default function App() {
             </div>
           );
         })}
+      </div>
+
+      <div className="floatingOverlayControls" aria-label="Overlay Controls">
+        <label className="toggle">
+          <input
+            type="checkbox"
+            disabled={panicStopEnabled}
+            checked={settings.overlayWindowEnabled}
+            onChange={(e) => updateSettings((s) => ({ ...s, overlayWindowEnabled: e.target.checked }))}
+          />
+          <span className="toggleLabel">Overlay</span>
+        </label>
+        <button
+          className="btn"
+          type="button"
+          disabled={panicStopEnabled || !settings.overlayWindowEnabled}
+          onClick={() => void bringOverlayToFront()}
+        >
+          Position
+        </button>
       </div>
     </div>
   );

@@ -13,6 +13,7 @@ export type TimerSettings = {
 
 export type CategorySettings = {
   enabled: boolean;
+  ttsName: string;
   timerCount: 1 | 2 | 3;
   timers: [TimerSettings, TimerSettings, TimerSettings];
 };
@@ -27,8 +28,9 @@ export type Settings = {
   overlayWindowMode: "overview" | "toast";
   overlayWindowCategories: Record<ScheduleType, boolean>;
   overlayBgHex: string; // "#rrggbb"
-  overlayScale: number; // 0.6-2.0
-  overlayBgOpacity: number; // 0.2-1.0
+  overlayScaleX: number; // 0.6-2.0
+  overlayScaleY: number; // 0.6-2.0
+  overlayBgOpacity: number; // 0-1.0
   categories: Record<ScheduleType, CategorySettings>;
 };
 
@@ -45,6 +47,7 @@ function defaultTimers(): [TimerSettings, TimerSettings, TimerSettings] {
 function defaultCategory(enabled = true): CategorySettings {
   return {
     enabled,
+    ttsName: "",
     timerCount: 3,
     timers: defaultTimers()
   };
@@ -64,14 +67,20 @@ const defaults: Settings = {
     world_boss: true
   },
   overlayBgHex: "#0b1220",
-  overlayScale: 1,
-  overlayBgOpacity: 0.92,
+  overlayScaleX: 1,
+  overlayScaleY: 1,
+  overlayBgOpacity: 0.2,
   categories: {
-    helltide: defaultCategory(true),
-    legion: defaultCategory(true),
-    world_boss: defaultCategory(true)
+    helltide: { ...defaultCategory(true), ttsName: "Höllenhochwasser" },
+    legion: { ...defaultCategory(true), ttsName: "Legionellen" },
+    world_boss: { ...defaultCategory(true), ttsName: "Weltscheff {boss}" }
   }
 };
+
+function normalizeTtsName(raw: unknown, fallback: string): string {
+  if (typeof raw !== "string") return fallback;
+  return raw.trim().slice(0, 80);
+}
 
 function normalizeHexColor(raw: any, fallback: string): string {
   if (typeof raw !== "string") return fallback;
@@ -119,6 +128,7 @@ function normalizeCategory(raw: any, fallback: CategorySettings): CategorySettin
 
   return {
     enabled: typeof raw?.enabled === "boolean" ? raw.enabled : fallback.enabled,
+    ttsName: normalizeTtsName(raw?.ttsName, fallback.ttsName),
     timerCount,
     timers
   };
@@ -180,8 +190,9 @@ export function loadSettings(): Settings {
             : defaults.overlayWindowCategories.world_boss
       },
       overlayBgHex: normalizeHexColor(raw.overlayBgHex, defaults.overlayBgHex),
-      overlayScale: clampFloat(raw.overlayScale, defaults.overlayScale, 0.6, 2.0),
-      overlayBgOpacity: clampFloat(raw.overlayBgOpacity, defaults.overlayBgOpacity, 0.2, 1.0),
+      overlayScaleX: clampFloat(raw.overlayScaleX, clampFloat(raw.overlayScale, defaults.overlayScaleX, 0.6, 2.0), 0.6, 2.0),
+      overlayScaleY: clampFloat(raw.overlayScaleY, clampFloat(raw.overlayScale, defaults.overlayScaleY, 0.6, 2.0), 0.6, 2.0),
+      overlayBgOpacity: clampFloat(raw.overlayBgOpacity, defaults.overlayBgOpacity, 0, 1.0),
       categories: {
         helltide: normalizeCategory(rawCategories.helltide, defaults.categories.helltide),
         legion: normalizeCategory(rawCategories.legion, defaults.categories.legion),
@@ -207,7 +218,8 @@ export function loadSettings(): Settings {
       overlayWindowMode: defaults.overlayWindowMode,
       overlayWindowCategories: defaults.overlayWindowCategories,
       overlayBgHex: defaults.overlayBgHex,
-      overlayScale: defaults.overlayScale,
+      overlayScaleX: defaults.overlayScaleX,
+      overlayScaleY: defaults.overlayScaleY,
       overlayBgOpacity: defaults.overlayBgOpacity,
       categories: {
         helltide: normalizeCategory(v4raw.categories?.helltide, defaults.categories.helltide),
@@ -233,7 +245,8 @@ export function loadSettings(): Settings {
       overlayWindowMode: defaults.overlayWindowMode,
       overlayWindowCategories: defaults.overlayWindowCategories,
       overlayBgHex: defaults.overlayBgHex,
-      overlayScale: defaults.overlayScale,
+      overlayScaleX: defaults.overlayScaleX,
+      overlayScaleY: defaults.overlayScaleY,
       overlayBgOpacity: defaults.overlayBgOpacity,
       categories: {
         helltide: normalizeCategory(v3.categories?.helltide, defaults.categories.helltide),
@@ -263,13 +276,25 @@ export function loadSettings(): Settings {
       overlayWindowMode: defaults.overlayWindowMode,
       overlayWindowCategories: defaults.overlayWindowCategories,
       overlayBgHex: defaults.overlayBgHex,
-      overlayScale: defaults.overlayScale,
+      overlayScaleX: defaults.overlayScaleX,
+      overlayScaleY: defaults.overlayScaleY,
       overlayBgOpacity: defaults.overlayBgOpacity,
       categories: {
-        helltide: { enabled: typeof enabled.helltide === "boolean" ? enabled.helltide : true, timerCount, timers: cloneTimers(timers) },
-        legion: { enabled: typeof enabled.legion === "boolean" ? enabled.legion : true, timerCount, timers: cloneTimers(timers) },
+        helltide: {
+          enabled: typeof enabled.helltide === "boolean" ? enabled.helltide : true,
+          ttsName: defaults.categories.helltide.ttsName,
+          timerCount,
+          timers: cloneTimers(timers)
+        },
+        legion: {
+          enabled: typeof enabled.legion === "boolean" ? enabled.legion : true,
+          ttsName: defaults.categories.legion.ttsName,
+          timerCount,
+          timers: cloneTimers(timers)
+        },
         world_boss: {
           enabled: typeof enabled.world_boss === "boolean" ? enabled.world_boss : true,
+          ttsName: defaults.categories.world_boss.ttsName,
           timerCount,
           timers: cloneTimers(timers)
         }
@@ -298,10 +323,11 @@ export function loadSettings(): Settings {
       overlayWindowMode: defaults.overlayWindowMode,
       overlayWindowCategories: defaults.overlayWindowCategories,
       overlayBgHex: defaults.overlayBgHex,
-      overlayScale: defaults.overlayScale,
+      overlayScaleX: defaults.overlayScaleX,
+      overlayScaleY: defaults.overlayScaleY,
       overlayBgOpacity: defaults.overlayBgOpacity,
       categories: {
-        helltide: { enabled, timerCount: 1, timers },
+        helltide: { enabled, ttsName: defaults.categories.helltide.ttsName, timerCount: 1, timers },
         legion: { ...defaultCategory(false) },
         world_boss: { ...defaultCategory(false) }
       }
