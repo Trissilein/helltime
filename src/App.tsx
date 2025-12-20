@@ -184,12 +184,14 @@ export default function App() {
           const { getCurrentWindow } = await import("@tauri-apps/api/window");
           const { LogicalSize } = await import("@tauri-apps/api/dpi");
           const win = getCurrentWindow();
-          const current = await win.innerSize();
+          const currentPhysical = await win.innerSize();
           const factor = await win.scaleFactor();
-          const logical = current.toLogical(factor);
+          const logical = currentPhysical.toLogical(factor);
 
-          const desired = clampInt(Math.ceil(document.documentElement.scrollHeight) + 8, 520, 920);
-          if (Math.abs(desired - current.height) <= 24) return;
+          const container = document.querySelector(".container") as HTMLElement | null;
+          const contentH = container ? Math.ceil(container.getBoundingClientRect().height) : Math.ceil(document.documentElement.scrollHeight);
+          const desired = clampInt(contentH + 24, 360, 920);
+          if (Math.abs(desired - logical.height) <= 16) return;
           await win.setSize(new LogicalSize(logical.width, desired));
         } catch {
           // ignore
