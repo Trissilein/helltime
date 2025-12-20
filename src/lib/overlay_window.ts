@@ -4,59 +4,126 @@ import type { ScheduleType } from "./types";
 import { pushOverlayDiag } from "./overlay_diag";
 
 export const OVERLAY_WINDOW_LABEL = "overlay";
+const OVERLAY_WINDOW_VERSION_KEY = "helltime:overlayWindowVersion";
+const OVERLAY_WINDOW_VERSION = "10";
+
+const ENSURE_INFLIGHT_KEY = "__helltimeEnsureOverlayWindowInFlight";
+
+function getEnsureInFlight(): Promise<void> | null {
+  return ((globalThis as any)[ENSURE_INFLIGHT_KEY] as Promise<void> | null) ?? null;
+}
+
+function setEnsureInFlight(promise: Promise<void> | null): void {
+  (globalThis as any)[ENSURE_INFLIGHT_KEY] = promise;
+}
 
 export async function ensureOverlayWindow(): Promise<void> {
   if (!isTauri()) return;
+  const existingInFlight = getEnsureInFlight();
+  if (existingInFlight) return existingInFlight;
   pushOverlayDiag("ensureOverlayWindow()");
-  try {
-    const { LogicalPosition, LogicalSize, WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+  const ensurePromise = (async () => {
+    const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
     const existing = await WebviewWindow.getByLabel(OVERLAY_WINDOW_LABEL);
     if (existing) {
-      pushOverlayDiag("ensureOverlayWindow: already exists");
-      return;
+      const version = (() => {
+        try {
+          return localStorage.getItem(OVERLAY_WINDOW_VERSION_KEY);
+        } catch {
+          return null;
+        }
+      })();
+
+      if (version === OVERLAY_WINDOW_VERSION) {
+        pushOverlayDiag("ensureOverlayWindow: already exists");
+        return;
+      }
+
+      // Recreate once when options change (e.g. transparency).
+      try {
+        await existing.destroy();
+      } catch {
+        // ignore
+      }
     }
 
     const win = new WebviewWindow(OVERLAY_WINDOW_LABEL, {
       title: "helltime overlay",
       url: "/?view=overlay",
-      center: true,
+      center: false,
       x: 40,
       y: 40,
-      width: 340,
-      height: 160,
-      minWidth: 260,
-      minHeight: 120,
+      width: 260,
+      height: 130,
       decorations: false,
       alwaysOnTop: true,
       skipTaskbar: true,
-      resizable: true,
+      shadow: false,
+      resizable: false,
       focus: false,
-      focusable: false,
-      transparent: false,
-      visible: true
+      focusable: true,
+      transparent: true,
+      visible: false
     });
 
-    win.once("tauri://created", () => {
+    const created = new Promise<void>((resolve, reject) => {
+      win.once("tauri://created", () => resolve());
+      win.once("tauri://error", (e) => reject(e));
+    });
+
+    try {
+      await created;
       pushOverlayDiag("overlay window created");
-      void win.setAlwaysOnTop(true);
-      void win.show();
-    });
-    win.once("tauri://error", (e) => {
-      pushOverlayDiag(`overlay window error: ${String((e as any)?.payload ?? e)}`);
-    });
+    } catch (e) {
+      const msg = String((e as any)?.payload ?? e);
+      pushOverlayDiag(`overlay window error: ${msg}`);
+      // If another ensure call created it first, treat as success.
+      if (msg.includes("already exists")) return;
+      const already = await WebviewWindow.getByLabel(OVERLAY_WINDOW_LABEL);
+      if (already) return;
+      throw e;
+    }
+
+    // Make it non-blocking by default: click-through overlay.
+    try {
+      await win.setIgnoreCursorEvents(true);
+    } catch {
+      // ignore
+    }
+
+    try {
+      await win.setBackgroundColor([0, 0, 0, 0]);
+      await win.setAlwaysOnTop(true);
+    } catch {
+      // ignore
+    }
 
     // Best-effort to keep it reachable even if persistence is borked.
     try {
-      await win.setSize(new LogicalSize(340, 160));
+      const { LogicalPosition, LogicalSize } = await import("@tauri-apps/api/dpi");
+      await win.setSize(new LogicalSize(260, 130));
       await win.setPosition(new LogicalPosition(40, 40));
     } catch {
       // ignore
     }
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn("ensureOverlayWindow failed", e);
-    pushOverlayDiag(`ensureOverlayWindow failed: ${String(e)}`);
-  }
+
+    try {
+      localStorage.setItem(OVERLAY_WINDOW_VERSION_KEY, OVERLAY_WINDOW_VERSION);
+    } catch {
+      // ignore
+    }
+  })()
+    .catch((e) => {
+      // eslint-disable-next-line no-console
+      console.warn("ensureOverlayWindow failed", e);
+      pushOverlayDiag(`ensureOverlayWindow failed: ${String(e)}`);
+    })
+    .finally(() => {
+      setEnsureInFlight(null);
+    });
+
+  setEnsureInFlight(ensurePromise);
+  return ensurePromise;
 }
 
 export async function setOverlayWindowVisible(visible: boolean): Promise<void> {
@@ -67,7 +134,6 @@ export async function setOverlayWindowVisible(visible: boolean): Promise<void> {
     const win = await WebviewWindow.getByLabel(OVERLAY_WINDOW_LABEL);
     if (!win) {
       pushOverlayDiag("setOverlayWindowVisible: no window");
-      if (visible) await ensureOverlayWindow();
       return;
     }
     if (visible) {
@@ -80,6 +146,33 @@ export async function setOverlayWindowVisible(visible: boolean): Promise<void> {
     // eslint-disable-next-line no-console
     console.warn("setOverlayWindowVisible failed", e);
     pushOverlayDiag(`setOverlayWindowVisible failed: ${String(e)}`);
+  }
+}
+
+export async function setOverlayWindowInteractive(interactive: boolean): Promise<void> {
+  if (!isTauri()) return;
+  pushOverlayDiag(`setOverlayWindowInteractive(${interactive})`);
+  try {
+    const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+    let win = await WebviewWindow.getByLabel(OVERLAY_WINDOW_LABEL);
+    if (!win && interactive) {
+      await ensureOverlayWindow();
+      win = await WebviewWindow.getByLabel(OVERLAY_WINDOW_LABEL);
+    }
+    if (!win) return;
+    // interactive=true => accept clicks; interactive=false => click-through
+    await win.setIgnoreCursorEvents(!interactive);
+    if (interactive) {
+      await win.show();
+      await win.setAlwaysOnTop(true);
+      try {
+        await win.setFocus();
+      } catch {
+        // ignore
+      }
+    }
+  } catch (e) {
+    pushOverlayDiag(`setOverlayWindowInteractive failed: ${String(e)}`);
   }
 }
 
@@ -148,18 +241,37 @@ export async function resetOverlayWindowBounds(): Promise<void> {
   }
   if (!isTauri()) return;
   try {
-    const { LogicalPosition, LogicalSize, WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-    const win = await WebviewWindow.getByLabel(OVERLAY_WINDOW_LABEL);
-    if (!win) {
-      await ensureOverlayWindow();
-      return;
+    const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+    const existing = await WebviewWindow.getByLabel(OVERLAY_WINDOW_LABEL);
+    if (existing) {
+      try {
+        await existing.destroy();
+      } catch {
+        // ignore
+      }
     }
-    await win.setSize(new LogicalSize(340, 160));
+    await ensureOverlayWindow();
+    const win = await WebviewWindow.getByLabel(OVERLAY_WINDOW_LABEL);
+    if (!win) return;
+    const { LogicalPosition, LogicalSize } = await import("@tauri-apps/api/dpi");
+    await win.setSize(new LogicalSize(260, 130));
     await win.setPosition(new LogicalPosition(40, 40));
     await win.show();
     await win.setAlwaysOnTop(true);
   } catch (e) {
     pushOverlayDiag(`resetOverlayWindowBounds failed: ${String(e)}`);
+  }
+}
+
+export async function destroyOverlayWindow(): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+    const win = await WebviewWindow.getByLabel(OVERLAY_WINDOW_LABEL);
+    if (!win) return;
+    await win.destroy();
+  } catch (e) {
+    pushOverlayDiag(`destroyOverlayWindow failed: ${String(e)}`);
   }
 }
 
@@ -169,7 +281,8 @@ export type OverlayWindowSettings = {
   categories: Record<ScheduleType, boolean>;
   bgHex: string;
   bgOpacity: number;
-  scale: number;
+  scaleX: number;
+  scaleY: number;
 };
 
 export function toOverlayWindowSettings(settings: Settings): OverlayWindowSettings {
@@ -179,7 +292,8 @@ export function toOverlayWindowSettings(settings: Settings): OverlayWindowSettin
     categories: settings.overlayWindowCategories,
     bgHex: settings.overlayBgHex,
     bgOpacity: settings.overlayBgOpacity,
-    scale: settings.overlayScale
+    scaleX: settings.overlayScaleX,
+    scaleY: settings.overlayScaleY
   };
 }
 

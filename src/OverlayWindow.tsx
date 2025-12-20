@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { fetchSchedule } from "./lib/helltides";
 import { loadSettings } from "./lib/settings";
@@ -18,6 +18,27 @@ function hexToRgba(hex: string, alpha: number): string {
   const g = (rgb >> 8) & 0xff;
   const b = rgb & 0xff;
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function invertHexColor(hex: string): string {
+  const m = /^#([0-9a-fA-F]{6})$/.exec((hex ?? "").trim());
+  if (!m) return "#f4f5f7";
+  const rgb = parseInt(m[1], 16);
+  const r = 255 - ((rgb >> 16) & 0xff);
+  const g = 255 - ((rgb >> 8) & 0xff);
+  const b = 255 - (rgb & 0xff);
+  const out = (r << 16) | (g << 8) | b;
+  return `#${out.toString(16).padStart(6, "0")}`;
+}
+
+function readPositioningUntil(): number {
+  try {
+    const raw = localStorage.getItem("helltime:overlayPositioningUntil");
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
 }
 
 function findNext<T extends { startTime: string }>(items: T[], now: number): T | null {
@@ -65,10 +86,13 @@ type ToastPayload = {
 };
 
 export default function OverlayWindow() {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const requestResizeRef = useRef<(() => void) | null>(null);
+  const scaleXRef = useRef(1);
+  const positioningRef = useRef(false);
   const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [lastRefreshAt, setLastRefreshAt] = useState<number | null>(null);
   const [settings, setSettings] = useState(() => loadSettings());
   const [toast, setToast] = useState<{ payload: ToastPayload; shownAt: number } | null>(null);
 
@@ -94,7 +118,6 @@ export default function OverlayWindow() {
         data.legion.sort((a, b) => a.timestamp - b.timestamp);
         data.world_boss.sort((a, b) => a.timestamp - b.timestamp);
         setSchedule(data);
-        setLastRefreshAt(Date.now());
         setError(null);
       } catch (e) {
         setError(String(e));
@@ -148,7 +171,18 @@ export default function OverlayWindow() {
             overlayWindowCategories: typeof p.categories === "object" && p.categories ? p.categories : s.overlayWindowCategories,
             overlayBgHex: typeof p.bgHex === "string" ? p.bgHex : s.overlayBgHex,
             overlayBgOpacity: typeof p.bgOpacity === "number" ? p.bgOpacity : s.overlayBgOpacity,
-            overlayScale: typeof p.scale === "number" ? p.scale : s.overlayScale
+            overlayScaleX:
+              typeof p.scaleX === "number"
+                ? p.scaleX
+                : typeof p.scale === "number"
+                  ? p.scale
+                  : (s as any).overlayScaleX ?? 1,
+            overlayScaleY:
+              typeof p.scaleY === "number"
+                ? p.scaleY
+                : typeof p.scale === "number"
+                  ? p.scale
+                  : (s as any).overlayScaleY ?? 1
           }));
         });
       } catch (e) {
@@ -192,18 +226,15 @@ export default function OverlayWindow() {
       .map((x) => x.type);
   }, [enabledTypes, nextByType]);
 
-  const lastUpdateLabel = useMemo(() => {
-    if (!lastRefreshAt) return "—";
-    try {
-      return new Date(lastRefreshAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    } catch {
-      return "—";
-    }
-  }, [lastRefreshAt]);
-
-  const scale = clampFloat(settings.overlayScale, 1, 0.6, 2.0);
-  const bgAlpha = clampFloat(settings.overlayBgOpacity, 0.92, 0.2, 1.0);
-  const bg = hexToRgba(settings.overlayBgHex, bgAlpha);
+  const scaleX = clampFloat(settings.overlayScaleX, 1, 0.6, 2.0);
+  const scaleY = clampFloat(settings.overlayScaleY, 1, 0.6, 2.0);
+  const positioning = useMemo(() => now < readPositioningUntil(), [now]);
+  useEffect(() => {
+    positioningRef.current = positioning;
+  }, [positioning]);
+  const bgAlpha = positioning ? 1 : clampFloat(settings.overlayBgOpacity, 0.2, 0, 1.0);
+  const bgHex = positioning ? invertHexColor(settings.overlayBgHex) : settings.overlayBgHex;
+  const bg = hexToRgba(bgHex, bgAlpha);
 
   const toastVisible = useMemo(() => {
     if (!toast) return false;
@@ -211,68 +242,184 @@ export default function OverlayWindow() {
     return now - toast.shownAt < ms;
   }, [toast, now]);
 
+  const mode = settings.overlayWindowMode === "toast" ? "toast" : "overview";
+
+  useEffect(() => {
+    scaleXRef.current = scaleX;
+  }, [scaleX]);
+
+  useEffect(() => {
+    requestResizeRef.current?.();
+  }, [mode, toastVisible, ordered.length, scaleX, scaleY, bgAlpha]);
+
   useEffect(() => {
     if (!isTauri()) return;
     void (async () => {
       try {
         const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
         const win = getCurrentWebviewWindow();
-        await win.show();
+        // Safety: never block clicks unless we're in explicit positioning mode.
+        await win.setIgnoreCursorEvents(!positioningRef.current);
+      } catch {
+        // ignore
+      }
+    })();
+  }, [positioning]);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let ro: ResizeObserver | null = null;
+    let lastW = 0;
+    let lastH = 0;
+    let timer: number | null = null;
+
+    void (async () => {
+      try {
+        const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+        const { LogicalSize } = await import("@tauri-apps/api/dpi");
+        const win = getCurrentWebviewWindow();
+
+        const commit = () => {
+          if (!hostRef.current) return;
+          const currentScaleX = scaleXRef.current;
+          const contentH = Math.ceil(hostRef.current.scrollHeight);
+
+          // Fixed-ish width (worst case) so layout doesn't jump when categories change.
+          const baseW = 220;
+          const w = Math.max(140, Math.round(baseW * currentScaleX));
+
+          // Dynamic height (from content) + small padding to avoid rounding-clips.
+          const h = Math.max(40, contentH + 8);
+          if (Math.abs(w - lastW) <= 1 && Math.abs(h - lastH) <= 1) return;
+          lastW = w;
+          lastH = h;
+          void win.setSize(new LogicalSize(w, h));
+        };
+
+        const schedule = () => {
+          if (timer) window.clearTimeout(timer);
+          timer = window.setTimeout(() => {
+            timer = null;
+            commit();
+          }, 50);
+        };
+
+        requestResizeRef.current = schedule;
+        ro = new ResizeObserver(() => schedule());
+        if (hostRef.current) ro.observe(hostRef.current);
+
+        // Also commit once after initial render.
+        schedule();
+      } catch {
+        // ignore
+      }
+    })();
+
+    return () => {
+      try {
+        ro?.disconnect();
+      } catch {
+        // ignore
+      }
+      if (timer) window.clearTimeout(timer);
+      requestResizeRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    void (async () => {
+      try {
+        const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+        const win = getCurrentWebviewWindow();
         await win.setAlwaysOnTop(true);
       } catch {
         // ignore
       }
     })();
-  }, [toastVisible, settings.overlayWindowMode]);
+  }, []);
+
+  async function startDragging(e: React.PointerEvent): Promise<void> {
+    if (!isTauri()) return;
+    if (e.button !== 0) return;
+    try {
+      e.preventDefault();
+      const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+      await getCurrentWebviewWindow().startDragging();
+    } catch {
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        await getCurrentWindow().startDragging();
+      } catch {
+        // ignore
+      }
+    }
+  }
 
   return (
     <div
-      className="container overlayOverview overlayHost"
-      data-tauri-drag-region
-      style={{ background: bg, transform: `scale(${scale})`, transformOrigin: "top left" }}
+      className={`overlayHost overlayMode-${mode} ${positioning ? "positioning" : ""}`}
+      style={{
+        background: mode === "toast" && !toastVisible && !positioning ? "rgba(0,0,0,0)" : bg,
+        ["--overlayScale" as any]: String(scaleY)
+      }}
+      ref={hostRef}
     >
-      <div className="overlayOverviewHeader" data-tauri-drag-region>
-        <div className="overlayOverviewBrand" data-tauri-drag-region>
-          helltime
-        </div>
-        <div className="overlayOverviewMeta" data-tauri-drag-region>
-          {settings.overlayWindowMode === "toast" ? "toast" : "overview"} • {lastUpdateLabel}
-        </div>
-      </div>
-
-      {error ? <div className="overlayOverviewError">Fehler</div> : null}
-
-      {toast && toastVisible ? (
-        <div className={`overlayToast ${toast.payload.type ?? ""}`}>
-          <div className="overlayToastTitle">{toast.payload.title}</div>
-          <div className="overlayToastBody">{toast.payload.body}</div>
+      {positioning ? (
+        <div
+          className="overlayDragHandle"
+          data-tauri-drag-region
+          onPointerDown={(e) => void startDragging(e)}
+          role="button"
+          aria-label="Overlay verschieben"
+          title="Ziehen zum Verschieben"
+        >
+          <span className="overlayDragHandleText">Ziehen zum Verschieben</span>
         </div>
       ) : null}
 
-      <div className="overlayOverviewRows">
-        {settings.overlayWindowMode === "toast" && !toastVisible ? <div className="overlayOverviewMeta">Warte auf Toast…</div> : null}
-        {ordered.length === 0 ? <div className="overlayOverviewError">Keine Kategorien ausgewählt</div> : null}
-        {ordered.map((type) => {
-          const next = nextByType ? nextByType[type] : null;
-          const startMs = next ? new Date(next.startTime).getTime() : null;
-          const remaining = startMs ? formatCountdown(startMs - now) : "—";
-          const timeLabel = next ? formatLocalTime(next.startTime) : "—";
-          const name = getEventName(type, next);
+      {error ? <div className="overlayError">Fehler</div> : null}
 
-          return (
-            <div className={`overlayOverviewRow ${type}`} key={type}>
-              <div className="overlayOverviewTitle">
-                <div className="overlayOverviewTitleMain">{name.title}</div>
-                {name.subtitle ? <div className="overlayOverviewTitleSub">{name.subtitle}</div> : null}
-              </div>
-              <div className="overlayOverviewRight">
-                <div className="overlayOverviewCountdown">{remaining}</div>
-                <div className="overlayOverviewTime">{timeLabel}</div>
-              </div>
+      {mode === "toast" ? (
+        toast && toastVisible ? (
+          <div className={`overlayToast ${toast.payload.type ?? ""}`} data-tauri-drag-region>
+            <div className="overlayToastLine">
+              <span className="overlayToastEvent">{toast.payload.title}</span>
+              <span className="overlayToastTime">{toast.payload.body}</span>
             </div>
-          );
-        })}
-      </div>
+          </div>
+        ) : positioning ? (
+          <div className="overlayToast" data-tauri-drag-region>
+            <div className="overlayToastLine">
+              <span className="overlayToastEvent">Overlay</span>
+              <span className="overlayToastTime">ziehen</span>
+            </div>
+          </div>
+        ) : null
+      ) : (
+        <div className="overlayLines" data-tauri-drag-region>
+          {ordered.length === 0 ? <div className="overlayEmpty">—</div> : null}
+          {ordered.map((type) => {
+            const next = nextByType ? nextByType[type] : null;
+            const startMs = next ? new Date(next.startTime).getTime() : null;
+            const remaining = startMs ? formatCountdown(startMs - now) : "—";
+            const name = getEventName(type, next);
+            const showSubline = type === "world_boss" && Boolean(name.subtitle);
+
+            return (
+              <div className={`overlayLine ${type}`} key={type} data-tauri-drag-region>
+                <span className="overlayLineEvent">
+                  <span className="overlayLineEventTitle">{name.title}</span>
+                  {showSubline ? <span className="overlayLineEventSub">{name.subtitle}</span> : null}
+                </span>
+                <span className="overlayLineTime">{remaining}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* keep the window draggable even in empty areas */}
     </div>
   );
 }

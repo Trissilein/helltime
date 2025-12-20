@@ -37,7 +37,7 @@ body {
 }
 
 body.overviewMode {
-  background: var(--bg);
+  background: transparent;
   background-repeat: no-repeat;
   overflow: hidden;
 }
@@ -52,9 +52,104 @@ input {
 }
 
 .container {
-  max-width: 980px;
+  max-width: 560px;
   margin: 0 auto;
   padding: 12px;
+}
+
+.errorBanner {
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 14px;
+  background: rgba(239, 68, 68, 0.08);
+  padding: 10px 12px;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 14px 12px;
+  z-index: 9999;
+}
+
+.modal {
+  width: min(680px, 100%);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(11, 18, 32, 0.92);
+  backdrop-filter: blur(14px);
+  overflow: hidden;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.modalTitle {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.3px;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.modalBody {
+  padding: 12px;
+  max-height: calc(100dvh - 120px);
+  overflow: auto;
+}
+
+.settingsBlock {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 10px 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn.small {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 10px;
+}
+
+.floatingOverlayControls {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(11, 18, 32, 0.78);
+  backdrop-filter: blur(12px);
+  z-index: 5000;
+}
+
+.floatingOverlayControls .toggle {
+  margin: 0;
+}
+
+.floatingOverlayControls .btn {
+  padding: 8px 10px;
 }
 
 .header {
@@ -236,6 +331,7 @@ input {
       rgba(255, 255, 255, 0.03) 70%
     ),
     rgba(255, 255, 255, 0.03);
+  min-height: 60px;
 }
 
 .categoryDetails .panelHeaderMeta {
@@ -520,6 +616,35 @@ input {
   text-overflow: ellipsis;
 }
 
+.categoryTitle {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  white-space: normal;
+  line-height: 1.05;
+}
+
+.categoryTitleMain {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.categoryTitleSub {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.15px;
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.categoryTitleSub.placeholder {
+  visibility: hidden;
+}
+
 .panelHeaderMeta {
   font-variant-numeric: tabular-nums;
   font-size: 18px;
@@ -572,6 +697,19 @@ input {
   color-scheme: dark;
   border-radius: 10px;
   padding: 8px 10px;
+}
+
+.textInput {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.92);
+  border-radius: 10px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.textInput::placeholder {
+  color: rgba(255, 255, 255, 0.42);
 }
 
 .select option {
@@ -660,153 +798,180 @@ input {
   flex-wrap: wrap;
 }
 
-.overlayOverview {
-  max-width: none;
-  padding: 10px;
-}
-
 .overlayHost {
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  overflow: hidden;
-}
-
-.overlayOverviewHeader {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.overlayOverviewBrand {
-  font-weight: 850;
-  letter-spacing: 0.6px;
-  font-size: 12px;
-}
-
-.overlayOverviewMeta {
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.overlayOverviewRows {
-  margin-top: 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  position: relative;
+  width: 100%;
+  padding: calc(4px * var(--overlayScale)) calc(6px * var(--overlayScale));
+  border-radius: calc(10px * var(--overlayScale));
+  color: rgba(255, 255, 255, 0.98);
+  user-select: none;
+  --overlayScale: 1;
+  --overlayEventCol: calc(118px * var(--overlayScale));
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.65),
+    0 0 6px rgba(0, 0, 0, 0.55);
 }
 
-.overlayOverviewRow {
+.overlayHost * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.overlayHost.positioning {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: -2px;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.65), 0 14px 34px rgba(0, 0, 0, 0.55);
+}
+
+.overlayDragHandle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.overlayOverviewRow.helltide {
-  border-color: color-mix(in srgb, var(--helltide) 40%, var(--border));
-}
-
-.overlayOverviewRow.legion {
-  border-color: color-mix(in srgb, var(--legion) 40%, var(--border));
-}
-
-.overlayOverviewRow.world_boss {
-  border-color: color-mix(in srgb, var(--world_boss) 45%, var(--border));
-}
-
-.overlayOverviewTitle {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.overlayOverviewTitleMain {
-  font-size: 12px;
-  font-weight: 750;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.overlayOverviewTitleSub {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.72);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.overlayOverviewRight {
-  flex: 0 0 auto;
-  text-align: right;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.overlayOverviewCountdown {
-  font-variant-numeric: tabular-nums;
-  font-weight: 800;
-  font-size: 12px;
-}
-
-.overlayOverviewTime {
-  font-size: 11px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.overlayOverviewError {
-  margin-top: 8px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(239, 68, 68, 0.35);
-  background: rgba(239, 68, 68, 0.12);
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 12px;
-}
-
-.overlayToast {
-  margin-top: 8px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
+  justify-content: center;
+  gap: 8px;
+  padding: calc(6px * var(--overlayScale)) calc(8px * var(--overlayScale));
+  margin-bottom: calc(4px * var(--overlayScale));
+  border-radius: calc(10px * var(--overlayScale));
   background: rgba(0, 0, 0, 0.22);
-}
-
-.overlayToast.helltide {
-  border-color: color-mix(in srgb, var(--helltide) 55%, var(--border));
-}
-
-.overlayToast.legion {
-  border-color: color-mix(in srgb, var(--legion) 55%, var(--border));
-}
-
-.overlayToast.world_boss {
-  border-color: color-mix(in srgb, var(--world_boss) 60%, var(--border));
-}
-
-.overlayToastTitle {
-  font-weight: 850;
-  font-size: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.55);
+  cursor: move;
+  font-weight: 900;
   letter-spacing: 0.2px;
 }
 
-.overlayToastBody {
-  margin-top: 4px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.82);
-  line-height: 1.25;
+.overlayDragHandleText {
+  font-size: calc(12px * var(--overlayScale));
+  opacity: 0.95;
+}
+
+.overlayLines {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--overlayScale));
+  width: 100%;
+}
+
+.overlayLine {
+  display: grid;
+  grid-template-columns: var(--overlayEventCol) auto;
+  align-items: baseline;
+  column-gap: calc(6px * var(--overlayScale));
+  padding: calc(2px * var(--overlayScale)) calc(2px * var(--overlayScale));
+  text-align: left;
+  width: 100%;
+}
+
+.overlayLine:has(.overlayLineEventSub) {
+  align-items: center;
+}
+
+.overlayLineEvent {
+  min-width: 0;
+  font-weight: 900;
+  font-size: calc(13px * var(--overlayScale));
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.1;
+}
+
+.overlayLineEventTitle {
+  display: block;
+}
+
+.overlayLineEventSub {
+  display: block;
+  font-weight: 850;
+  font-size: calc(11px * var(--overlayScale));
+  opacity: 0.88;
+  letter-spacing: 0.15px;
+  line-height: 1.05;
+}
+
+.overlayLineTime {
+  font-variant-numeric: tabular-nums;
+  font-size: calc(17px * var(--overlayScale));
+  font-weight: 950;
+  letter-spacing: 0.4px;
+  flex: 0 0 auto;
+  text-align: left;
+  line-height: 1.1;
+}
+
+.overlayLine.helltide .overlayLineEvent,
+.overlayLine.helltide .overlayLineTime {
+  color: color-mix(in srgb, var(--helltide) 78%, white);
+}
+
+.overlayLine.legion .overlayLineEvent,
+.overlayLine.legion .overlayLineTime {
+  color: color-mix(in srgb, var(--legion) 78%, white);
+}
+
+.overlayLine.world_boss .overlayLineEvent,
+.overlayLine.world_boss .overlayLineTime {
+  color: color-mix(in srgb, var(--world_boss) 72%, white);
+}
+
+.overlayToast {
+  border-radius: 12px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.overlayError,
+.overlayEmpty {
+  font-size: 13px;
+  opacity: 0.85;
+  padding: 6px 0;
+}
+
+.overlayEmpty {
+  text-align: center;
+  padding: 14px 0;
+}
+
+.overlayToastLine {
+  display: grid;
+  grid-template-columns: var(--overlayEventCol) auto;
+  align-items: baseline;
+  column-gap: calc(6px * var(--overlayScale));
+  padding: calc(2px * var(--overlayScale)) calc(2px * var(--overlayScale));
+  text-align: left;
+}
+
+.overlayToastEvent {
+  font-weight: 900;
+  font-size: calc(13px * var(--overlayScale));
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.overlayToastTime {
+  font-variant-numeric: tabular-nums;
+  font-size: calc(17px * var(--overlayScale));
+  font-weight: 950;
+  letter-spacing: 0.4px;
+  text-align: left;
+  line-height: 1.1;
+}
+
+.overlayToast.helltide .overlayToastEvent,
+.overlayToast.helltide .overlayToastTime {
+  color: color-mix(in srgb, var(--helltide) 78%, white);
+}
+.overlayToast.legion .overlayToastEvent,
+.overlayToast.legion .overlayToastTime {
+  color: color-mix(in srgb, var(--legion) 78%, white);
+}
+.overlayToast.world_boss .overlayToastEvent,
+.overlayToast.world_boss .overlayToastTime {
+  color: color-mix(in srgb, var(--world_boss) 72%, white);
 }
 
 .overlayDebugBox {
