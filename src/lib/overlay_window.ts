@@ -35,6 +35,13 @@ export async function ensureOverlayWindow(): Promise<void> {
       })();
 
       if (version === OVERLAY_WINDOW_VERSION) {
+        // Always enforce workspace behavior even when the window already exists.
+        // This prevents "sticky across desktops" behavior after runtime updates or persisted OS state.
+        try {
+          await existing.setVisibleOnAllWorkspaces(false);
+        } catch {
+          // ignore
+        }
         pushOverlayDiag("ensureOverlayWindow: already exists");
         return;
       }
@@ -149,6 +156,11 @@ export async function setOverlayWindowVisible(visible: boolean): Promise<void> {
     if (visible) {
       await win.show();
       await win.setAlwaysOnTop(true);
+      try {
+        await win.setVisibleOnAllWorkspaces(false);
+      } catch {
+        // ignore
+      }
     } else {
       await win.hide();
     }
@@ -175,6 +187,11 @@ export async function setOverlayWindowInteractive(interactive: boolean): Promise
     if (interactive) {
       await win.show();
       await win.setAlwaysOnTop(true);
+      try {
+        await win.setVisibleOnAllWorkspaces(false);
+      } catch {
+        // ignore
+      }
       try {
         await win.setFocus();
       } catch {
