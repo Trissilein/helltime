@@ -296,6 +296,16 @@ input {
   background: rgba(255, 255, 255, 0.1);
 }
 
+.btn:focus-visible,
+.iconBtn:focus-visible,
+.select:focus-visible,
+.textInput:focus-visible,
+input[type="range"]:focus-visible,
+input[type="color"]:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.35);
+  outline-offset: 2px;
+}
+
 .btn.primary {
   border-color: rgba(255, 77, 77, 0.5);
   background: rgba(255, 77, 77, 0.18);
@@ -875,9 +885,9 @@ input {
 .overlayLine {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: baseline;
+  align-items: center;
   column-gap: calc(6px * var(--overlayScale));
-  padding: calc(2px * var(--overlayScale)) calc(2px * var(--overlayScale));
+  padding: calc(3px * var(--overlayScale)) calc(2px * var(--overlayScale));
   text-align: left;
   width: 100%;
 }
@@ -894,7 +904,7 @@ input {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.1;
+  line-height: 1.25;
 }
 
 .overlayLineEventTitle {
@@ -907,7 +917,7 @@ input {
   font-size: calc(11px * var(--overlayScale));
   opacity: 0.88;
   letter-spacing: 0.15px;
-  line-height: 1.05;
+  line-height: 1.2;
 }
 
 .overlayLineTime {
@@ -917,7 +927,7 @@ input {
   letter-spacing: 0.4px;
   flex: 0 0 auto;
   text-align: right;
-  line-height: 1.1;
+  line-height: 1.25;
 }
 
 .overlayLine.helltide .overlayLineEvent,
@@ -959,7 +969,7 @@ input {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   column-gap: calc(6px * var(--overlayScale));
-  padding: calc(2px * var(--overlayScale)) calc(2px * var(--overlayScale));
+  padding: calc(3px * var(--overlayScale)) calc(2px * var(--overlayScale));
   text-align: left;
 }
 
@@ -970,6 +980,7 @@ input {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.25;
 }
 
 .overlayToastTime {
@@ -978,7 +989,7 @@ input {
   font-weight: 950;
   letter-spacing: 0.4px;
   text-align: right;
-  line-height: 1.1;
+  line-height: 1.25;
 }
 
 .overlayToast.helltide .overlayToastEvent,

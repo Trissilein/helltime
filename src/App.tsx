@@ -885,31 +885,28 @@ export default function App() {
                   </button>
                 </div>
 
-                {debugOpen ? (
-                  <div className="settingsBlock">
-                    <div className="sectionTitle">Debug</div>
-                    <div className="actions">
-                      <button className="btn" type="button" disabled={panicStopEnabled} onClick={() => void refreshOverlayDebug()}>
-                        Overlay Status
-                      </button>
-                      <button
-                        className="btn"
-                        type="button"
-                        disabled={panicStopEnabled}
-                        onClick={() => {
-                          clearOverlayDiag();
-                          setOverlayDebug(null);
-                        }}
-                      >
-                        Logs leeren
-                      </button>
-                      <button className="btn" type="button" disabled={panicStopEnabled} onClick={() => void bringOverlayToFront()}>
-                        Positionieren
-                      </button>
-                    </div>
-                    {overlayDebug ? <pre className="overlayDebugBox">{overlayDebug}</pre> : null}
-                  </div>
-                ) : null}
+	                {debugOpen ? (
+	                  <div className="settingsBlock">
+	                    <div className="sectionTitle">Debug</div>
+	                    <div className="actions">
+	                      <button className="btn" type="button" disabled={panicStopEnabled} onClick={() => void refreshOverlayDebug()}>
+	                        Overlay Status
+	                      </button>
+	                      <button
+	                        className="btn"
+	                        type="button"
+	                        disabled={panicStopEnabled}
+	                        onClick={() => {
+	                          clearOverlayDiag();
+	                          setOverlayDebug(null);
+	                        }}
+	                      >
+	                        Logs leeren
+	                      </button>
+	                    </div>
+	                    {overlayDebug ? <pre className="overlayDebugBox">{overlayDebug}</pre> : null}
+	                  </div>
+	                ) : null}
               </div>
             </div>
           </div>
