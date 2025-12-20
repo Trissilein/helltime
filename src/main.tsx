@@ -20,23 +20,7 @@ if (view !== "overlay") {
 }
 
 if (view !== "overlay" && isTauri()) {
-  void (async () => {
-    try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-      const main = getCurrentWindow();
-      await main.onCloseRequested(async () => {
-        try {
-          const overlay = await WebviewWindow.getByLabel("overlay");
-          await overlay?.destroy();
-        } catch {
-          // ignore
-        }
-      });
-    } catch {
-      // ignore
-    }
-  })();
+  // Overlay shutdown is handled in Rust (`src-tauri/src/main.rs`) to avoid double-close races.
 }
 
 if (view === "overlay") {

@@ -79,15 +79,24 @@ fn main() {
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_shell::init())
     .on_window_event(|window, event| {
-      if let tauri::WindowEvent::CloseRequested { .. } = event {
-        if window.label() == "main" {
-          if let Some(overlay) = window.app_handle().get_webview_window("overlay") {
-            let _ = overlay.close();
+      match event {
+        tauri::WindowEvent::CloseRequested { .. } => {
+          if window.label() != "main" {
+            return;
           }
-          // Ensure the process terminates even if the overlay was the last window alive.
+          if let Some(overlay) = window.app_handle().get_webview_window("overlay") {
+            let _ = overlay.destroy();
+          }
+        }
+        // If anything keeps the app alive (e.g. an overlay window), force-exit once the main window is gone.
+        tauri::WindowEvent::Destroyed => {
+          if window.label() != "main" {
+            return;
+          }
           window.app_handle().exit(0);
         }
-      }
+        _ => {}
+      };
     })
     .invoke_handler(tauri::generate_handler![
       fetch_schedule,
