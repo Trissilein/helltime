@@ -175,7 +175,6 @@ export default function App() {
 
   useEffect(() => {
     if (!isTauri()) return;
-    if (settingsOpen) return;
     if (panicStopEnabled) return;
 
     const timer = window.setTimeout(() => {
@@ -188,11 +187,26 @@ export default function App() {
           const factor = await win.scaleFactor();
           const logical = currentPhysical.toLogical(factor);
 
-          const container = document.querySelector(".container") as HTMLElement | null;
-          const contentH = container ? Math.ceil(container.getBoundingClientRect().height) : Math.ceil(document.documentElement.scrollHeight);
-          const floating = document.querySelector(".floatingOverlayControls") as HTMLElement | null;
-          const floatingH = floating ? Math.ceil(floating.getBoundingClientRect().height) : 0;
-          const desired = clampInt(contentH + floatingH + 36, 360, 980);
+          let desired: number;
+          if (settingsOpen) {
+            const backdrop = document.querySelector(".modalBackdrop") as HTMLElement | null;
+            const header = document.querySelector(".modalHeader") as HTMLElement | null;
+            const body = document.querySelector(".modalBody") as HTMLElement | null;
+
+            const padTop = backdrop ? Math.ceil(Number.parseFloat(getComputedStyle(backdrop).paddingTop) || 0) : 0;
+            const padBottom = backdrop ? Math.ceil(Number.parseFloat(getComputedStyle(backdrop).paddingBottom) || 0) : 0;
+            const headerH = header ? Math.ceil(header.getBoundingClientRect().height) : 0;
+            const bodyH = body ? Math.ceil(body.scrollHeight) : Math.ceil(document.documentElement.scrollHeight);
+
+            desired = clampInt(padTop + headerH + bodyH + padBottom, 360, 980);
+          } else {
+            const container = document.querySelector(".container") as HTMLElement | null;
+            const contentH = container ? Math.ceil(container.getBoundingClientRect().height) : Math.ceil(document.documentElement.scrollHeight);
+            const floating = document.querySelector(".floatingOverlayControls") as HTMLElement | null;
+            const floatingH = floating ? Math.ceil(floating.getBoundingClientRect().height) : 0;
+            desired = clampInt(contentH + floatingH + 36, 360, 980);
+          }
+
           if (Math.abs(desired - logical.height) <= 16) return;
           await win.setSize(new LogicalSize(logical.width, desired));
         } catch {
@@ -202,7 +216,7 @@ export default function App() {
     }, 120);
 
     return () => window.clearTimeout(timer);
-  }, [openCategory, categoryLayoutKey, settingsOpen, panicStopEnabled]);
+  }, [openCategory, categoryLayoutKey, settingsOpen, debugOpen, overlayDebug, panicStopEnabled]);
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -541,7 +555,7 @@ export default function App() {
     const recent = readOverlayDiag().slice(-8);
     const lines = [
       `exists=${status.exists} visible=${status.visible} title=${status.title ?? "—"}`,
-      status.pos && status.size ? `pos=${status.pos.x},${status.pos.y} size=${status.size.w}x${status.size.h}` : "",
+      status.size ? `size=${status.size.w}x${status.size.h}` : "",
       status.error ? `error=${status.error}` : "",
       ...recent.map((e) => `${new Date(e.ts).toLocaleTimeString()} ${e.msg}`)
     ].filter(Boolean);

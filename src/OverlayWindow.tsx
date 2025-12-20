@@ -113,6 +113,15 @@ export default function OverlayWindow() {
   }, []);
 
   useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== "settings_v6") return;
+      setSettings(loadSettings());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  useEffect(() => {
     async function refresh() {
       try {
         const data = await fetchSchedule();
@@ -164,28 +173,8 @@ export default function OverlayWindow() {
       try {
         const { listen } = await import("@tauri-apps/api/event");
         unlisten = await listen<any>("helltime:overlay-settings", (event) => {
-          const p = event.payload as any;
-          if (!p || typeof p !== "object") return;
-          setSettings((s) => ({
-            ...s,
-            overlayWindowEnabled: typeof p.enabled === "boolean" ? p.enabled : s.overlayWindowEnabled,
-            overlayWindowMode: p.mode === "toast" ? "toast" : "overview",
-            overlayWindowCategories: typeof p.categories === "object" && p.categories ? p.categories : s.overlayWindowCategories,
-            overlayBgHex: typeof p.bgHex === "string" ? p.bgHex : s.overlayBgHex,
-            overlayBgOpacity: typeof p.bgOpacity === "number" ? p.bgOpacity : s.overlayBgOpacity,
-            overlayScaleX:
-              typeof p.scaleX === "number"
-                ? p.scaleX
-                : typeof p.scale === "number"
-                  ? p.scale
-                  : (s as any).overlayScaleX ?? 1,
-            overlayScaleY:
-              typeof p.scaleY === "number"
-                ? p.scaleY
-                : typeof p.scale === "number"
-                  ? p.scale
-                  : (s as any).overlayScaleY ?? 1
-          }));
+          void event;
+          setSettings(loadSettings());
         });
       } catch (e) {
         // eslint-disable-next-line no-console
@@ -213,8 +202,9 @@ export default function OverlayWindow() {
 
   const enabledTypes = useMemo(() => {
     const cats = settings.overlayWindowCategories ?? { helltide: true, legion: true, world_boss: true };
-    return types.filter((t) => cats[t] !== false);
-  }, [settings.overlayWindowCategories]);
+    const enabled = settings.categories;
+    return types.filter((t) => cats[t] !== false && enabled[t]?.enabled !== false);
+  }, [settings.categories, settings.overlayWindowCategories]);
 
   const ordered = useMemo(() => {
     if (!nextByType) return [...enabledTypes];
@@ -230,8 +220,7 @@ export default function OverlayWindow() {
 
   const scaleX = clampFloat(settings.overlayScaleX, 1, 0.6, 2.0);
   const scaleY = clampFloat(settings.overlayScaleY, 1, 0.6, 2.0);
-  // Step 3: content scaling derived from X/Y (geometric mean).
-  const contentScale = clampFloat(Math.sqrt(scaleX * scaleY), 1, 0.6, 2.0);
+  const contentScale = scaleY;
   const positioning = useMemo(() => now < readPositioningUntil(), [now]);
   useEffect(() => {
     positioningRef.current = positioning;
@@ -247,6 +236,7 @@ export default function OverlayWindow() {
   }, [toast, now]);
 
   const mode = settings.overlayWindowMode === "toast" ? "toast" : "overview";
+  const overviewEmpty = mode === "overview" && ordered.length === 0 && !positioning;
 
   useEffect(() => {
     scaleXRef.current = scaleX;
@@ -371,7 +361,8 @@ export default function OverlayWindow() {
     <div
       className={`overlayHost overlayMode-${mode} ${positioning ? "positioning" : ""}`}
       style={{
-        background: mode === "toast" && !toastVisible && !positioning ? "rgba(0,0,0,0)" : bg,
+        background:
+          (mode === "toast" && !toastVisible && !positioning) || overviewEmpty ? "rgba(0,0,0,0)" : bg,
         ["--overlayScale" as any]: String(contentScale)
       }}
       ref={hostRef}
@@ -410,7 +401,6 @@ export default function OverlayWindow() {
           ) : null
         ) : (
           <div className="overlayLines" data-tauri-drag-region>
-            {ordered.length === 0 ? <div className="overlayEmpty">—</div> : null}
             {ordered.map((type) => {
               const next = nextByType ? nextByType[type] : null;
               const startMs = next ? new Date(next.startTime).getTime() : null;

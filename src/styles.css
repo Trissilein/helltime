@@ -238,12 +238,14 @@ input {
 }
 
 .pill {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.85);
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 .pillClamp {
@@ -521,18 +523,19 @@ input {
 }
 
 .pill.small {
-  padding: 4px 8px;
   font-size: 11px;
 }
 
 .badge {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 3px 8px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.85);
-  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.82);
+  background: transparent;
   flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 .badge.helltide {
