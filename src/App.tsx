@@ -171,7 +171,7 @@ export default function App() {
         return `${t}:${c.enabled ? 1 : 0}:${c.timerCount}`;
       })
       .join("|");
-  }, [settings]);
+  }, [settings.categories]);
 
   useEffect(() => {
     if (!isTauri()) return;
