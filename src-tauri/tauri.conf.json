@@ -12,8 +12,9 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "helltime",
-        "width": 420,
+        "width": 380,
         "height": 720,
         "resizable": true
       }
@@ -21,7 +22,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all"
+    "targets": "all",
+    "icon": ["icons/icon.png", "icons/icon.ico"]
   }
 }
-
