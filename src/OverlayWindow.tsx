@@ -87,8 +87,10 @@ type ToastPayload = {
 
 export default function OverlayWindow() {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const requestResizeRef = useRef<(() => void) | null>(null);
   const scaleXRef = useRef(1);
+  const scaleYRef = useRef(1);
   const positioningRef = useRef(false);
   const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -228,6 +230,8 @@ export default function OverlayWindow() {
 
   const scaleX = clampFloat(settings.overlayScaleX, 1, 0.6, 2.0);
   const scaleY = clampFloat(settings.overlayScaleY, 1, 0.6, 2.0);
+  // Step 3: content scaling derived from X/Y (geometric mean).
+  const contentScale = clampFloat(Math.sqrt(scaleX * scaleY), 1, 0.6, 2.0);
   const positioning = useMemo(() => now < readPositioningUntil(), [now]);
   useEffect(() => {
     positioningRef.current = positioning;
@@ -247,6 +251,10 @@ export default function OverlayWindow() {
   useEffect(() => {
     scaleXRef.current = scaleX;
   }, [scaleX]);
+
+  useEffect(() => {
+    scaleYRef.current = scaleY;
+  }, [scaleY]);
 
   useEffect(() => {
     requestResizeRef.current?.();
@@ -282,14 +290,17 @@ export default function OverlayWindow() {
         const commit = () => {
           if (!hostRef.current) return;
           const currentScaleX = scaleXRef.current;
-          const contentH = Math.ceil(hostRef.current.scrollHeight);
+          const currentScaleY = scaleYRef.current;
+          const contentH = Math.ceil(contentRef.current?.scrollHeight ?? hostRef.current.scrollHeight);
 
-          // Fixed-ish width (worst case) so layout doesn't jump when categories change.
-          const baseW = 220;
-          const w = Math.max(140, Math.round(baseW * currentScaleX));
+          // Step 1: width follows X.
+          const baseW = 280;
+          const w = Math.max(170, Math.round(baseW * currentScaleX));
 
-          // Dynamic height (from content) + small padding to avoid rounding-clips.
-          const h = Math.max(40, contentH + 8);
+          // Step 2: height follows Y (but never clip content).
+          const baseH = 118;
+          const hTarget = Math.max(56, Math.round(baseH * currentScaleY));
+          const h = Math.max(hTarget, Math.max(40, contentH + 8));
           if (Math.abs(w - lastW) <= 1 && Math.abs(h - lastH) <= 1) return;
           lastW = w;
           lastH = h;
@@ -306,7 +317,7 @@ export default function OverlayWindow() {
 
         requestResizeRef.current = schedule;
         ro = new ResizeObserver(() => schedule());
-        if (hostRef.current) ro.observe(hostRef.current);
+        if (contentRef.current) ro.observe(contentRef.current);
 
         // Also commit once after initial render.
         schedule();
@@ -361,63 +372,65 @@ export default function OverlayWindow() {
       className={`overlayHost overlayMode-${mode} ${positioning ? "positioning" : ""}`}
       style={{
         background: mode === "toast" && !toastVisible && !positioning ? "rgba(0,0,0,0)" : bg,
-        ["--overlayScale" as any]: String(scaleY)
+        ["--overlayScale" as any]: String(contentScale)
       }}
       ref={hostRef}
     >
-      {positioning ? (
-        <div
-          className="overlayDragHandle"
-          data-tauri-drag-region
-          onPointerDown={(e) => void startDragging(e)}
-          role="button"
-          aria-label="Overlay verschieben"
-          title="Ziehen zum Verschieben"
-        >
-          <span className="overlayDragHandleText">Ziehen zum Verschieben</span>
-        </div>
-      ) : null}
-
-      {error ? <div className="overlayError">Fehler</div> : null}
-
-      {mode === "toast" ? (
-        toast && toastVisible ? (
-          <div className={`overlayToast ${toast.payload.type ?? ""}`} data-tauri-drag-region>
-            <div className="overlayToastLine">
-              <span className="overlayToastEvent">{toast.payload.title}</span>
-              <span className="overlayToastTime">{toast.payload.body}</span>
-            </div>
+      <div className="overlayContent" ref={contentRef}>
+        {positioning ? (
+          <div
+            className="overlayDragHandle"
+            data-tauri-drag-region
+            onPointerDown={(e) => void startDragging(e)}
+            role="button"
+            aria-label="Overlay verschieben"
+            title="Ziehen zum Verschieben"
+          >
+            <span className="overlayDragHandleText">Ziehen zum Verschieben</span>
           </div>
-        ) : positioning ? (
-          <div className="overlayToast" data-tauri-drag-region>
-            <div className="overlayToastLine">
-              <span className="overlayToastEvent">Overlay</span>
-              <span className="overlayToastTime">ziehen</span>
-            </div>
-          </div>
-        ) : null
-      ) : (
-        <div className="overlayLines" data-tauri-drag-region>
-          {ordered.length === 0 ? <div className="overlayEmpty">—</div> : null}
-          {ordered.map((type) => {
-            const next = nextByType ? nextByType[type] : null;
-            const startMs = next ? new Date(next.startTime).getTime() : null;
-            const remaining = startMs ? formatCountdown(startMs - now) : "—";
-            const name = getEventName(type, next);
-            const showSubline = type === "world_boss" && Boolean(name.subtitle);
+        ) : null}
 
-            return (
-              <div className={`overlayLine ${type}`} key={type} data-tauri-drag-region>
-                <span className="overlayLineEvent">
-                  <span className="overlayLineEventTitle">{name.title}</span>
-                  {showSubline ? <span className="overlayLineEventSub">{name.subtitle}</span> : null}
-                </span>
-                <span className="overlayLineTime">{remaining}</span>
+        {error ? <div className="overlayError">Fehler</div> : null}
+
+        {mode === "toast" ? (
+          toast && toastVisible ? (
+            <div className={`overlayToast ${toast.payload.type ?? ""}`} data-tauri-drag-region>
+              <div className="overlayToastLine">
+                <span className="overlayToastEvent">{toast.payload.title}</span>
+                <span className="overlayToastTime">{toast.payload.body}</span>
               </div>
-            );
-          })}
-        </div>
-      )}
+            </div>
+          ) : positioning ? (
+            <div className="overlayToast" data-tauri-drag-region>
+              <div className="overlayToastLine">
+                <span className="overlayToastEvent">Overlay</span>
+                <span className="overlayToastTime">ziehen</span>
+              </div>
+            </div>
+          ) : null
+        ) : (
+          <div className="overlayLines" data-tauri-drag-region>
+            {ordered.length === 0 ? <div className="overlayEmpty">—</div> : null}
+            {ordered.map((type) => {
+              const next = nextByType ? nextByType[type] : null;
+              const startMs = next ? new Date(next.startTime).getTime() : null;
+              const remaining = startMs ? formatCountdown(startMs - now) : "—";
+              const name = getEventName(type, next);
+              const showSubline = type === "world_boss" && Boolean(name.subtitle);
+
+              return (
+                <div className={`overlayLine ${type}`} key={type} data-tauri-drag-region>
+                  <span className="overlayLineEvent">
+                    <span className="overlayLineEventTitle">{name.title}</span>
+                    {showSubline ? <span className="overlayLineEventSub">{name.subtitle}</span> : null}
+                  </span>
+                  <span className="overlayLineTime">{remaining}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* keep the window draggable even in empty areas */}
     </div>
