@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
-use tauri::State;
+use tauri::{Manager, State};
 use tokio::sync::Mutex;
 
 const SCHEDULE_URL: &str = "https://helltides.com/api/schedule";
@@ -78,6 +78,17 @@ fn main() {
     })
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_shell::init())
+    .on_window_event(|window, event| {
+      if let tauri::WindowEvent::CloseRequested { .. } = event {
+        if window.label() == "main" {
+          if let Some(overlay) = window.app_handle().get_webview_window("overlay") {
+            let _ = overlay.close();
+          }
+          // Ensure the process terminates even if the overlay was the last window alive.
+          window.app_handle().exit(0);
+        }
+      }
+    })
     .invoke_handler(tauri::generate_handler![
       fetch_schedule,
     ])
