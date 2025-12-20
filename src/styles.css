@@ -749,8 +749,10 @@ input {
 }
 
 .level.disabled {
-  opacity: 0.42;
-  background: rgba(255, 255, 255, 0.015);
+  opacity: 0.28;
+  filter: grayscale(0.9) saturate(0.2);
+  background: rgba(255, 255, 255, 0.012);
+  border-style: dashed;
 }
 
 .level.disabled .pill {

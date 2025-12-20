@@ -986,7 +986,10 @@ export default function App() {
                       ) : null}
                     </div>
 
-                    {[0, 1, 2].map((i) => {
+                    {[
+                      ...Array.from({ length: category.timerCount }, (_, i) => i),
+                      ...Array.from({ length: 3 - category.timerCount }, (_, i) => category.timerCount + i)
+                    ].map((i) => {
                       const timer = category.timers[i];
                       if (!timer) return null;
                       const timerEnabled = i < category.timerCount;
