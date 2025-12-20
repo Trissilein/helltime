@@ -327,18 +327,22 @@ export default function App() {
   }, [schedule, now]);
 
   const orderedTypes = useMemo<ScheduleType[]>(() => {
-    if (!nextByType) return [...types];
-    return [...types]
+    const enabled = types.filter((t) => settings.categories[t].enabled);
+    const disabled = types.filter((t) => !settings.categories[t].enabled);
+    if (!nextByType) return [...enabled, ...disabled];
+
+    const enabledSorted = [...enabled]
       .map((type) => {
         const next = nextByType[type];
         const startMs = next ? new Date(next.startTime).getTime() : Number.POSITIVE_INFINITY;
         return { type, startMs };
       })
-      .sort((a, b) => {
-        return a.startMs - b.startMs;
-      })
+      .sort((a, b) => a.startMs - b.startMs)
       .map((x) => x.type);
-  }, [nextByType]);
+
+    // Disabled categories are always at the bottom in stable order.
+    return [...enabledSorted, ...disabled];
+  }, [nextByType, settings.categories]);
 
   const nextEnabledOverall = useMemo(() => {
     if (!nextByType) return null;
@@ -912,7 +916,11 @@ export default function App() {
           const isOpen = category.enabled && openCategory === type;
 
           return (
-            <div className={`card span12 categoryCard ${type} categoryDetails ${isOpen ? "open" : ""}`} key={type}>
+            <div
+              className={`card span12 categoryCard ${type} categoryDetails ${isOpen ? "open" : ""} ${category.enabled ? "" : "disabled"}`}
+              key={type}
+              aria-disabled={!category.enabled}
+            >
               <div className="panelHeaderRow categoryHeader">
                 <button
                   className="panelHeaderBtn categoryExpandBtn"
@@ -986,28 +994,20 @@ export default function App() {
                       ) : null}
                     </div>
 
-                    {[
-                      ...Array.from({ length: category.timerCount }, (_, i) => i),
-                      ...Array.from({ length: 3 - category.timerCount }, (_, i) => category.timerCount + i)
-                    ].map((i) => {
+                    {Array.from({ length: category.timerCount }).map((_, i) => {
                       const timer = category.timers[i];
                       if (!timer) return null;
-                      const timerEnabled = i < category.timerCount;
 
                       return (
-                        <div className={`level ${timerEnabled ? "" : "disabled"}`} key={i} aria-disabled={!timerEnabled}>
+                        <div className="level" key={i}>
                           <div className="levelHeader">
-                            <div className="levelTitle">
-                              {`Timer ${i + 1}`} {!timerEnabled ? <span className="pill small">deaktiviert</span> : null}
-                            </div>
+                            <div className="levelTitle">{`Timer ${i + 1}`}</div>
                             <button
                               className="btn"
                               type="button"
-                              disabled={panicStopEnabled || !settings.soundEnabled || !timerEnabled}
                               onClick={() => {
                                 if (panicStopEnabled) return;
                                 if (!settings.soundEnabled) return;
-                                if (!timerEnabled) return;
                                 const beepMs = playBeep(timer.beepPattern, timer.pitchHz, settings.volume);
                                 if (timer.ttsEnabled) {
                                   window.setTimeout(() => {
@@ -1030,7 +1030,6 @@ export default function App() {
                                 min={1}
                                 max={60}
                                 step={1}
-                                disabled={!timerEnabled}
                                 value={timer.minutesBefore}
                                 onChange={(e) => updateTimer(type, i, { minutesBefore: clampInt(Number(e.target.value), 1, 60) })}
                               />
@@ -1040,7 +1039,6 @@ export default function App() {
                               <label className="toggle">
                                 <input
                                   type="checkbox"
-                                  disabled={!timerEnabled}
                                   checked={timer.ttsEnabled}
                                   onChange={(e) => updateTimer(type, i, { ttsEnabled: e.target.checked })}
                                 />
@@ -1051,7 +1049,6 @@ export default function App() {
                                 <label>Beep</label>
                                 <select
                                   className="select"
-                                  disabled={!timerEnabled}
                                   value={timer.beepPattern}
                                   onChange={(e) => updateTimer(type, i, { beepPattern: e.target.value as BeepPattern })}
                                 >
@@ -1070,11 +1067,10 @@ export default function App() {
                                   type="button"
                                   aria-label="Ton testen"
                                   title="Ton testen"
-                                  disabled={!settings.soundEnabled || !timerEnabled}
+                                  disabled={!settings.soundEnabled}
                                   onClick={() => {
                                     if (panicStopEnabled) return;
                                     if (!settings.soundEnabled) return;
-                                    if (!timerEnabled) return;
                                     playBeep(timer.beepPattern, timer.pitchHz, settings.volume);
                                   }}
                                 >
@@ -1091,7 +1087,6 @@ export default function App() {
                                 min={120}
                                 max={2000}
                                 step={10}
-                                disabled={!timerEnabled}
                                 value={timer.pitchHz}
                                 onChange={(e) => updateTimer(type, i, { pitchHz: clampInt(Number(e.target.value), 120, 2000) })}
                               />

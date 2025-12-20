@@ -307,6 +307,16 @@ input {
   overflow: hidden;
 }
 
+.categoryCard.disabled {
+  opacity: 0.34;
+  filter: grayscale(0.95) saturate(0.2);
+  border-style: dashed;
+}
+
+.categoryCard.disabled::before {
+  opacity: 0.06;
+}
+
 .categoryDetails {
   padding: 0;
 }
@@ -746,17 +756,6 @@ input {
   border-radius: 14px;
   padding: 10px;
   background: rgba(255, 255, 255, 0.03);
-}
-
-.level.disabled {
-  opacity: 0.28;
-  filter: grayscale(0.9) saturate(0.2);
-  background: rgba(255, 255, 255, 0.012);
-  border-style: dashed;
-}
-
-.level.disabled .pill {
-  opacity: 0.85;
 }
 
 .levelHeader {
