@@ -190,7 +190,9 @@ export default function App() {
 
           const container = document.querySelector(".container") as HTMLElement | null;
           const contentH = container ? Math.ceil(container.getBoundingClientRect().height) : Math.ceil(document.documentElement.scrollHeight);
-          const desired = clampInt(contentH + 24, 360, 920);
+          const floating = document.querySelector(".floatingOverlayControls") as HTMLElement | null;
+          const floatingH = floating ? Math.ceil(floating.getBoundingClientRect().height) : 0;
+          const desired = clampInt(contentH + floatingH + 36, 360, 980);
           if (Math.abs(desired - logical.height) <= 16) return;
           await win.setSize(new LogicalSize(logical.width, desired));
         } catch {
@@ -984,20 +986,25 @@ export default function App() {
                       ) : null}
                     </div>
 
-                    {Array.from({ length: category.timerCount }).map((_, i) => {
+                    {[0, 1, 2].map((i) => {
                       const timer = category.timers[i];
                       if (!timer) return null;
+                      const timerEnabled = i < category.timerCount;
 
                       return (
-                        <div className="level" key={i}>
+                        <div className={`level ${timerEnabled ? "" : "disabled"}`} key={i} aria-disabled={!timerEnabled}>
                           <div className="levelHeader">
-                            <div className="levelTitle">{`Timer ${i + 1}`}</div>
+                            <div className="levelTitle">
+                              {`Timer ${i + 1}`} {!timerEnabled ? <span className="pill small">deaktiviert</span> : null}
+                            </div>
                             <button
                               className="btn"
                               type="button"
+                              disabled={panicStopEnabled || !settings.soundEnabled || !timerEnabled}
                               onClick={() => {
                                 if (panicStopEnabled) return;
                                 if (!settings.soundEnabled) return;
+                                if (!timerEnabled) return;
                                 const beepMs = playBeep(timer.beepPattern, timer.pitchHz, settings.volume);
                                 if (timer.ttsEnabled) {
                                   window.setTimeout(() => {
@@ -1020,6 +1027,7 @@ export default function App() {
                                 min={1}
                                 max={60}
                                 step={1}
+                                disabled={!timerEnabled}
                                 value={timer.minutesBefore}
                                 onChange={(e) => updateTimer(type, i, { minutesBefore: clampInt(Number(e.target.value), 1, 60) })}
                               />
@@ -1029,6 +1037,7 @@ export default function App() {
                               <label className="toggle">
                                 <input
                                   type="checkbox"
+                                  disabled={!timerEnabled}
                                   checked={timer.ttsEnabled}
                                   onChange={(e) => updateTimer(type, i, { ttsEnabled: e.target.checked })}
                                 />
@@ -1039,6 +1048,7 @@ export default function App() {
                                 <label>Beep</label>
                                 <select
                                   className="select"
+                                  disabled={!timerEnabled}
                                   value={timer.beepPattern}
                                   onChange={(e) => updateTimer(type, i, { beepPattern: e.target.value as BeepPattern })}
                                 >
@@ -1057,10 +1067,11 @@ export default function App() {
                                   type="button"
                                   aria-label="Ton testen"
                                   title="Ton testen"
-                                  disabled={!settings.soundEnabled}
+                                  disabled={!settings.soundEnabled || !timerEnabled}
                                   onClick={() => {
                                     if (panicStopEnabled) return;
                                     if (!settings.soundEnabled) return;
+                                    if (!timerEnabled) return;
                                     playBeep(timer.beepPattern, timer.pitchHz, settings.volume);
                                   }}
                                 >
@@ -1077,6 +1088,7 @@ export default function App() {
                                 min={120}
                                 max={2000}
                                 step={10}
+                                disabled={!timerEnabled}
                                 value={timer.pitchHz}
                                 onChange={(e) => updateTimer(type, i, { pitchHz: clampInt(Number(e.target.value), 120, 2000) })}
                               />

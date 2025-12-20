@@ -748,6 +748,15 @@ input {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.level.disabled {
+  opacity: 0.42;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.level.disabled .pill {
+  opacity: 0.85;
+}
+
 .levelHeader {
   display: flex;
   align-items: center;
