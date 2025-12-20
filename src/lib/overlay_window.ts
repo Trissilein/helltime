@@ -51,6 +51,9 @@ export async function ensureOverlayWindow(): Promise<void> {
       title: "helltime overlay",
       url: "/?view=overlay",
       center: false,
+      // Best-effort: keep the overlay on the current virtual desktop.
+      // (On Windows this might be ignored depending on runtime support.)
+      visibleOnAllWorkspaces: false,
       x: 40,
       y: 40,
       width: 260,
@@ -94,6 +97,13 @@ export async function ensureOverlayWindow(): Promise<void> {
     try {
       await win.setBackgroundColor([0, 0, 0, 0]);
       await win.setAlwaysOnTop(true);
+    } catch {
+      // ignore
+    }
+
+    // Best-effort: keep it confined to the current workspace.
+    try {
+      await win.setVisibleOnAllWorkspaces(false);
     } catch {
       // ignore
     }
