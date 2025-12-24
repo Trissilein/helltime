@@ -10,5 +10,8 @@ src-tauri/target/
 .idea/
 .vscode/
 
+# Claude
+.claude/
+
 # Misc
 *.url
