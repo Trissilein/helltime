@@ -1051,7 +1051,7 @@ export default function App() {
                                 />
                               </div>
 
-                              <label className="toggle" style={{ flexShrink: 0, marginLeft: 'auto' }}>
+                              <label className="toggle" style={{ flexShrink: 0, marginLeft: 'auto', marginTop: '5px' }}>
                                 <input
                                   type="checkbox"
                                   checked={timer.ttsEnabled}

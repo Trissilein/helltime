@@ -10,12 +10,12 @@
   --space-6: 12px;
 
   /* ===== TYPOGRAPHY SCALE ===== */
-  --text-xs: 10px;
-  --text-sm: 11px;
-  --text-base: 12px;
-  --text-lg: 13px;
-  --text-xl: 15px;
-  --text-2xl: 17px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-lg: 14px;
+  --text-xl: 16px;
+  --text-2xl: 18px;
 
   /* ===== FONT WEIGHTS ===== */
   --font-regular: 400;
