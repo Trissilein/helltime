@@ -804,6 +804,14 @@ input[type="color"]:focus-visible {
   border-bottom: 1px solid rgba(212, 175, 55, 0.12);
   min-height: 48px; /* Reduced from 52px */
   box-shadow: inset 0 1px 0 rgba(212, 175, 55, 0.06);
+  transition: all var(--transition-base);
+}
+
+.panelHeaderRow:hover {
+  background: linear-gradient(90deg, rgba(10, 8, 8, 0.4) 0%, rgba(0, 0, 0, 0.3) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(212, 175, 55, 0.12),
+    inset 0 0 12px rgba(212, 175, 55, 0.08);
 }
 
 .panelHeaderRight {
@@ -816,7 +824,8 @@ input[type="color"]:focus-visible {
 .panelHeaderBtn {
   appearance: none;
   border: 0;
-  padding: 0;
+  padding: var(--space-2) var(--space-3);
+  margin: calc(var(--space-2) * -1) calc(var(--space-3) * -1);
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -826,11 +835,18 @@ input[type="color"]:focus-visible {
   min-width: 0;
   text-align: left;
   flex: 1 1 auto;
-  transition: opacity var(--transition-fast);
+  transition: all var(--transition-base);
+  border-radius: var(--radius-md);
 }
 
 .panelHeaderBtn:hover {
-  opacity: 0.9;
+  background: rgba(212, 175, 55, 0.08);
+  color: rgba(255, 255, 255, 1);
+}
+
+.panelHeaderBtn:hover::after {
+  color: rgba(212, 175, 55, 1);
+  text-shadow: 0 0 8px rgba(212, 175, 55, 0.5);
 }
 
 .panelHeaderBtn:disabled {
