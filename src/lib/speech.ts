@@ -1,3 +1,21 @@
+// German approximation words for natural-sounding announcements
+const APPROXIMATION_WORDS = [
+  "ungefähr",
+  "circa",
+  "etwa",
+  "knapp",
+  "rund",
+  "zirka",
+  "in etwa",
+  "schätzungsweise",
+  "annähernd",
+  "vergleichsweise"
+];
+
+function getRandomApproximation(): string {
+  return APPROXIMATION_WORDS[Math.floor(Math.random() * APPROXIMATION_WORDS.length)];
+}
+
 export function formatRemainingSpeech(msRemaining: number): string {
   const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000));
 
@@ -9,6 +27,12 @@ export function formatRemainingSpeech(msRemaining: number): string {
   const seconds = totalSeconds % 60; // Original seconds for short durations
 
   const parts: string[] = [];
+
+  // Add approximation word for longer durations (minutes or hours)
+  if (hours > 0 || minutes > 0) {
+    parts.push(getRandomApproximation());
+  }
+
   if (hours > 0) parts.push(`${hours} ${hours === 1 ? "Stunde" : "Stunden"}`);
   if (minutes > 0) parts.push(`${minutes} ${minutes === 1 ? "Minute" : "Minuten"}`);
 
