@@ -1,19 +1,24 @@
 export function formatRemainingSpeech(msRemaining: number): string {
   const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
+
+  // Round to nearest minute for more natural announcements
+  // (4:57 → 5 minutes, not 4 minutes)
+  const totalMinutes = Math.round(totalSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const seconds = totalSeconds % 60; // Original seconds for short durations
 
   const parts: string[] = [];
   if (hours > 0) parts.push(`${hours} ${hours === 1 ? "Stunde" : "Stunden"}`);
   if (minutes > 0) parts.push(`${minutes} ${minutes === 1 ? "Minute" : "Minuten"}`);
 
-  if (hours === 0 && minutes === 0) {
+  // When very short (< 1 minute rounded), announce seconds
+  if (hours === 0 && totalMinutes === 0) {
     return `${seconds} ${seconds === 1 ? "Sekunde" : "Sekunden"}`;
   }
 
   // Sekunden nur anhängen, wenn es wirklich kurz ist (klingt sonst nervig)
-  if (hours === 0 && minutes <= 1 && seconds > 0) {
+  if (hours === 0 && totalMinutes <= 1 && seconds > 0) {
     parts.push(`${seconds} ${seconds === 1 ? "Sekunde" : "Sekunden"}`);
   }
 
