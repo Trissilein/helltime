@@ -1033,7 +1033,7 @@ export default function App() {
 
                           <div className="timerBody">
                             <div className="timerRow">
-                              <div className="field" style={{ flex: 1, minWidth: '120px' }}>
+                              <div className="field" style={{ flex: '0 1 200px', minWidth: '140px' }}>
                                 <label>
                                   Minuten vorher: <span className="pill">{timer.minutesBefore} min</span>
                                 </label>
@@ -1047,7 +1047,7 @@ export default function App() {
                                 />
                               </div>
 
-                              <label className="toggle">
+                              <label className="toggle" style={{ flexShrink: 0 }}>
                                 <input
                                   type="checkbox"
                                   checked={timer.ttsEnabled}
@@ -1056,7 +1056,7 @@ export default function App() {
                                 <span className="toggleLabel">TTS</span>
                               </label>
 
-                              <div className="field" style={{ margin: 0, minWidth: '80px' }}>
+                              <div className="field" style={{ flex: '0 0 auto', margin: 0, minWidth: '80px' }}>
                                 <label>Beep</label>
                                 <select
                                   className="select"
@@ -1071,7 +1071,7 @@ export default function App() {
                             </div>
 
                             <div className="timerRow">
-                              <div className="field" style={{ flex: 1, minWidth: '120px' }}>
+                              <div className="field" style={{ flex: '0 1 200px', minWidth: '140px' }}>
                                 <label className="pitchRow">
                                   Tonhöhe: <span className="pill">{timer.pitchHz} Hz</span>
                                 </label>
@@ -1090,6 +1090,7 @@ export default function App() {
                                 type="button"
                                 aria-label="Ton testen"
                                 title="Ton testen"
+                                style={{ flexShrink: 0 }}
                                 disabled={!settings.soundEnabled}
                                 onClick={() => {
                                   if (panicStopEnabled) return;

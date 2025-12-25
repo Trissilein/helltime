@@ -39,9 +39,9 @@
   --gold: #d4af37;
   --gold-dim: #a08428;
   --gold-bright: #f4d03f;
-  --burgundy: #4a0f0f;
-  --burgundy-dark: #2a0505;
-  --burgundy-bright: #6b1515;
+  --burgundy: #0f0505;
+  --burgundy-dark: #050202;
+  --burgundy-bright: #1a0808;
 
   /* ===== TEXT HIERARCHY ===== */
   --text-primary: rgba(255, 255, 255, 0.96);
@@ -109,9 +109,9 @@ body {
   min-height: 100dvh;
   margin: 0;
   background:
-    radial-gradient(1200px 600px at 50% 0%, rgba(74, 15, 15, 0.35), transparent 70%),
-    radial-gradient(800px 400px at 50% 100%, rgba(42, 5, 5, 0.25), transparent 60%),
-    linear-gradient(180deg, #0a0a0a 0%, #0b0b0b 100%);
+    radial-gradient(1200px 600px at 50% 0%, rgba(15, 5, 5, 0.15), transparent 70%),
+    radial-gradient(800px 400px at 50% 100%, rgba(5, 2, 2, 0.12), transparent 60%),
+    linear-gradient(180deg, #080808 0%, #0a0a0a 100%);
   background-repeat: no-repeat;
   overflow-y: scroll;
   scrollbar-gutter: stable;
@@ -162,7 +162,7 @@ input {
   border: 1px solid var(--border);
   border-left: 2px solid rgba(239, 68, 68, 0.6);
   border-radius: var(--radius-lg); /* 8px - was 14px */
-  background: linear-gradient(135deg, rgba(74, 15, 15, 0.4) 0%, rgba(0, 0, 0, 0.3) 100%);
+  background: linear-gradient(135deg, rgba(12, 5, 5, 0.5) 0%, rgba(0, 0, 0, 0.4) 100%);
   padding: var(--space-3) var(--space-4); /* 6px 8px - was 10px 12px */
   color: var(--text-primary);
   font-size: var(--text-sm); /* 11px - was 12px */
@@ -187,7 +187,7 @@ input {
   width: min(680px, 100%);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-xl); /* 10px - was 16px */
-  background: linear-gradient(160deg, var(--burgundy) 0%, var(--burgundy-dark) 50%, #000000 100%);
+  background: linear-gradient(160deg, #0c0c0c 0%, #050505 50%, #000000 100%);
   backdrop-filter: blur(12px);
   overflow: hidden;
   box-shadow:
@@ -203,7 +203,7 @@ input {
   gap: var(--space-4); /* 8px - was 10px */
   padding: var(--space-4) var(--space-5); /* 8px 10px - was 10px 12px */
   border-bottom: 1px solid rgba(212, 175, 55, 0.2);
-  background: rgba(74, 15, 15, 0.3);
+  background: rgba(10, 10, 10, 0.6);
   box-shadow: inset 0 1px 0 rgba(212, 175, 55, 0.1);
 }
 
@@ -224,7 +224,7 @@ input {
 .settingsBlock {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg); /* 8px - was 14px */
-  background: linear-gradient(135deg, rgba(74, 15, 15, 0.4) 0%, rgba(42, 5, 5, 0.3) 100%);
+  background: linear-gradient(135deg, rgba(10, 10, 10, 0.6) 0%, rgba(5, 5, 5, 0.5) 100%);
   padding: var(--space-3) var(--space-4); /* 6px 8px - was 10px 12px */
   display: grid;
   gap: var(--space-3); /* 6px - was 10px */
@@ -252,7 +252,7 @@ input {
   padding: var(--space-3) var(--space-4); /* 6px 8px - was 10px 12px */
   border: 1px solid var(--border);
   border-radius: var(--radius-lg); /* 8px - was 14px */
-  background: linear-gradient(135deg, rgba(74, 15, 15, 0.9) 0%, rgba(0, 0, 0, 0.9) 100%);
+  background: linear-gradient(135deg, rgba(12, 12, 12, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%);
   backdrop-filter: blur(10px);
   box-shadow:
     var(--shadow-md),
@@ -276,7 +276,7 @@ input {
   gap: var(--space-4); /* 8px - was 12px */
   padding: var(--space-3) var(--space-4); /* 6px 8px - was 10px 12px */
   border: 1px solid var(--border);
-  background: linear-gradient(180deg, var(--burgundy) 0%, var(--burgundy-dark) 100%);
+  background: linear-gradient(180deg, #0e0e0e 0%, #080808 100%);
   border-radius: var(--radius-lg); /* 8px - was 14px */
   backdrop-filter: blur(8px);
   box-shadow:
@@ -330,7 +330,7 @@ input {
   grid-column: span 12;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg); /* 8px - was 14px */
-  background: linear-gradient(135deg, var(--burgundy) 0%, var(--burgundy-dark) 100%);
+  background: linear-gradient(135deg, #0a0a0a 0%, #000000 100%);
   padding: var(--space-3); /* 6px - was 12px - CRITICAL COMPACTNESS */
   box-shadow: var(--shadow-sm);
   transition: all var(--transition-base);
@@ -448,7 +448,7 @@ input[type="color"]:focus-visible {
 
 .btn.primary {
   border-color: rgba(212, 175, 55, 0.4);
-  background: linear-gradient(135deg, var(--burgundy) 0%, var(--burgundy-dark) 100%);
+  background: linear-gradient(135deg, #0e0e0e 0%, #050505 100%);
   color: rgba(255, 255, 255, 0.98);
   font-weight: var(--font-semibold);
   box-shadow:
@@ -458,7 +458,7 @@ input[type="color"]:focus-visible {
 
 .btn.primary:hover {
   border-color: rgba(212, 175, 55, 0.6);
-  background: linear-gradient(135deg, var(--burgundy-bright) 0%, var(--burgundy) 100%);
+  background: linear-gradient(135deg, #121212 0%, #080808 100%);
   box-shadow:
     0 0 12px rgba(212, 175, 55, 0.3),
     inset 0 1px 0 rgba(212, 175, 55, 0.25),
@@ -469,7 +469,7 @@ input[type="color"]:focus-visible {
   position: relative;
   overflow: hidden;
   transition: all var(--transition-base);
-  background: linear-gradient(145deg, var(--burgundy) 0%, var(--burgundy-dark) 60%, #000000 100%);
+  background: linear-gradient(145deg, #0d0d0d 0%, #060606 60%, #000000 100%);
   box-shadow:
     inset 0 1px 0 rgba(212, 175, 55, 0.08),
     0 1px 3px rgba(0, 0, 0, 0.5),
@@ -526,8 +526,8 @@ input[type="color"]:focus-visible {
 .categoryDetails .panelHeaderRow {
   background: linear-gradient(
       90deg,
-      rgba(74, 15, 15, 0.45),
-      rgba(0, 0, 0, 0.35) 60%
+      rgba(12, 10, 10, 0.5),
+      rgba(0, 0, 0, 0.4) 60%
     );
   min-height: 44px; /* ULTRA COMPACT - was 52px */
   transition: background var(--transition-base);
@@ -672,7 +672,7 @@ input[type="color"]:focus-visible {
   border: 1px solid var(--border);
   border-left: 2px solid rgba(212, 175, 55, 0.6);
   border-radius: var(--radius-lg); /* 8px */
-  background: linear-gradient(135deg, rgba(74, 15, 15, 0.35) 0%, rgba(0, 0, 0, 0.25) 100%);
+  background: linear-gradient(135deg, rgba(12, 8, 5, 0.4) 0%, rgba(0, 0, 0, 0.3) 100%);
   padding: var(--space-3) var(--space-4); /* 6px 8px */
   display: flex;
   align-items: flex-start;
@@ -801,7 +801,7 @@ input[type="color"]:focus-visible {
   justify-content: space-between;
   gap: var(--space-4); /* 8px - was 12px */
   padding: var(--space-3) var(--space-4); /* 6px 8px - was 10px 12px */
-  background: linear-gradient(90deg, rgba(74, 15, 15, 0.2) 0%, rgba(0, 0, 0, 0.15) 100%);
+  background: linear-gradient(90deg, rgba(10, 8, 8, 0.25) 0%, rgba(0, 0, 0, 0.2) 100%);
   border-bottom: 1px solid rgba(212, 175, 55, 0.12);
   min-height: 48px; /* Reduced from 52px */
   box-shadow: inset 0 1px 0 rgba(212, 175, 55, 0.06);
@@ -912,7 +912,7 @@ input[type="color"]:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg); /* 8px - COMPACT */
   overflow: hidden;
-  background: linear-gradient(135deg, rgba(74, 15, 15, 0.25) 0%, rgba(0, 0, 0, 0.3) 100%);
+  background: linear-gradient(135deg, rgba(10, 8, 8, 0.3) 0%, rgba(0, 0, 0, 0.35) 100%);
   box-shadow: inset 0 1px 0 rgba(212, 175, 55, 0.05);
 }
 
@@ -1017,7 +1017,7 @@ input[type="color"]:focus-visible {
   border-left: 2px solid rgba(212, 175, 55, 0.4);
   border-radius: var(--radius-sm); /* 4px - COMPACT */
   padding: var(--space-2); /* 4px - ULTRA COMPACT */
-  background: linear-gradient(135deg, rgba(74, 15, 15, 0.35) 0%, rgba(0, 0, 0, 0.45) 100%);
+  background: linear-gradient(135deg, rgba(10, 8, 8, 0.4) 0%, rgba(0, 0, 0, 0.5) 100%);
   transition: all var(--transition-base);
   position: relative;
   box-shadow: inset 0 1px 0 rgba(212, 175, 55, 0.06);
@@ -1040,7 +1040,7 @@ input[type="color"]:focus-visible {
 .level:hover {
   border-color: var(--border-strong);
   border-left-color: rgba(212, 175, 55, 0.7);
-  background: linear-gradient(135deg, rgba(74, 15, 15, 0.5) 0%, rgba(0, 0, 0, 0.6) 100%);
+  background: linear-gradient(135deg, rgba(12, 10, 10, 0.5) 0%, rgba(0, 0, 0, 0.65) 100%);
   box-shadow:
     inset 2px 0 8px rgba(212, 175, 55, 0.15),
     0 0 6px rgba(212, 175, 55, 0.1),
