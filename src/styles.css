@@ -304,11 +304,10 @@ input {
 }
 
 .brandAccent {
-  color: var(--gold);
-  filter: brightness(1.1);
+  color: #cc2929;
+  filter: brightness(1.2);
   text-shadow:
-    0 0 12px rgba(212, 175, 55, 0.6),
-    0 0 24px rgba(212, 175, 55, 0.3);
+    0 0 8px rgba(204, 41, 41, 0.5);
 }
 
 .title p {

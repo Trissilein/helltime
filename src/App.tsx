@@ -1047,7 +1047,7 @@ export default function App() {
                                 />
                               </div>
 
-                              <label className="toggle" style={{ flexShrink: 0 }}>
+                              <label className="toggle" style={{ flexShrink: 0, marginLeft: 'auto' }}>
                                 <input
                                   type="checkbox"
                                   checked={timer.ttsEnabled}
@@ -1056,7 +1056,7 @@ export default function App() {
                                 <span className="toggleLabel">TTS</span>
                               </label>
 
-                              <div className="field" style={{ flex: '0 0 auto', margin: 0, minWidth: '80px' }}>
+                              <div className="field" style={{ flex: '0 0 auto', margin: 0, minWidth: '80px', textAlign: 'right' }}>
                                 <label>Beep</label>
                                 <select
                                   className="select"
