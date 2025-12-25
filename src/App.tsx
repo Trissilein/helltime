@@ -1032,21 +1032,21 @@ export default function App() {
                           </div>
 
                           <div className="timerBody">
-                            <div className="field">
-                              <label>
-                                Minuten vorher: <span className="pill">{timer.minutesBefore} min</span>
-                              </label>
-                              <input
-                                type="range"
-                                min={1}
-                                max={60}
-                                step={1}
-                                value={timer.minutesBefore}
-                                onChange={(e) => updateTimer(type, i, { minutesBefore: clampInt(Number(e.target.value), 1, 60) })}
-                              />
-                            </div>
-
                             <div className="timerRow">
+                              <div className="field" style={{ flex: 1, minWidth: '120px' }}>
+                                <label>
+                                  Minuten vorher: <span className="pill">{timer.minutesBefore} min</span>
+                                </label>
+                                <input
+                                  type="range"
+                                  min={5}
+                                  max={60}
+                                  step={5}
+                                  value={timer.minutesBefore}
+                                  onChange={(e) => updateTimer(type, i, { minutesBefore: clampInt(Number(e.target.value), 5, 60) })}
+                                />
+                              </div>
+
                               <label className="toggle">
                                 <input
                                   type="checkbox"
@@ -1056,7 +1056,7 @@ export default function App() {
                                 <span className="toggleLabel">TTS</span>
                               </label>
 
-                              <div className="field" style={{ margin: 0 }}>
+                              <div className="field" style={{ margin: 0, minWidth: '80px' }}>
                                 <label>Beep</label>
                                 <select
                                   className="select"
@@ -1064,43 +1064,46 @@ export default function App() {
                                   onChange={(e) => updateTimer(type, i, { beepPattern: e.target.value as BeepPattern })}
                                 >
                                   <option value="beep">Beep</option>
-                                  <option value="double">Double Beep</option>
-                                  <option value="triple">Triple Beep</option>
+                                  <option value="double">Double</option>
+                                  <option value="triple">Triple</option>
                                 </select>
                               </div>
                             </div>
 
-                            <div className="field">
-                              <label className="pitchRow">
-                                Tonhöhe: <span className="pill">{timer.pitchHz} Hz</span>
-                                <button
-                                  className="iconBtn"
-                                  type="button"
-                                  aria-label="Ton testen"
-                                  title="Ton testen"
-                                  disabled={!settings.soundEnabled}
-                                  onClick={() => {
-                                    if (panicStopEnabled) return;
-                                    if (!settings.soundEnabled) return;
-                                    playBeep(timer.beepPattern, timer.pitchHz, settings.volume);
-                                  }}
-                                >
-                                  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                                    <path
-                                      fill="currentColor"
-                                      d="M3 10v4c0 .55.45 1 1 1h3l4 4V5L7 9H4c-.55 0-1 .45-1 1zm13.5 2c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"
-                                    />
-                                  </svg>
-                                </button>
-                              </label>
-                              <input
-                                type="range"
-                                min={120}
-                                max={2000}
-                                step={10}
-                                value={timer.pitchHz}
-                                onChange={(e) => updateTimer(type, i, { pitchHz: clampInt(Number(e.target.value), 120, 2000) })}
-                              />
+                            <div className="timerRow">
+                              <div className="field" style={{ flex: 1, minWidth: '120px' }}>
+                                <label className="pitchRow">
+                                  Tonhöhe: <span className="pill">{timer.pitchHz} Hz</span>
+                                </label>
+                                <input
+                                  type="range"
+                                  min={200}
+                                  max={2000}
+                                  step={100}
+                                  value={timer.pitchHz}
+                                  onChange={(e) => updateTimer(type, i, { pitchHz: clampInt(Number(e.target.value), 200, 2000) })}
+                                />
+                              </div>
+
+                              <button
+                                className="iconBtn"
+                                type="button"
+                                aria-label="Ton testen"
+                                title="Ton testen"
+                                disabled={!settings.soundEnabled}
+                                onClick={() => {
+                                  if (panicStopEnabled) return;
+                                  if (!settings.soundEnabled) return;
+                                  playBeep(timer.beepPattern, timer.pitchHz, settings.volume);
+                                }}
+                              >
+                                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                                  <path
+                                    fill="currentColor"
+                                    d="M3 10v4c0 .55.45 1 1 1h3l4 4V5L7 9H4c-.55 0-1 .45-1 1zm13.5 2c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"
+                                  />
+                                </svg>
+                              </button>
                             </div>
                           </div>
                         </div>
