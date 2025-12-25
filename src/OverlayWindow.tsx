@@ -4,6 +4,7 @@ import { fetchSchedule } from "./lib/helltides";
 import { loadSettings } from "./lib/settings";
 import { formatCountdown, formatLocalTime } from "./lib/time";
 import type { ScheduleResponse, ScheduleType, WorldBossScheduleItem } from "./lib/types";
+import { findNext } from "./lib/helpers";
 
 function clampFloat(n: unknown, fallback: number, min: number, max: number): number {
   if (typeof n !== "number" || !Number.isFinite(n)) return fallback;
@@ -39,21 +40,6 @@ function readPositioningUntil(): number {
   } catch {
     return 0;
   }
-}
-
-function findNext<T extends { startTime: string }>(items: T[], now: number): T | null {
-  let best: T | null = null;
-  let bestStartMs = Number.POSITIVE_INFINITY;
-  for (const item of items) {
-    const startMs = new Date(item.startTime).getTime();
-    if (!Number.isFinite(startMs)) continue;
-    if (startMs <= now) continue;
-    if (startMs < bestStartMs) {
-      best = item;
-      bestStartMs = startMs;
-    }
-  }
-  return best;
 }
 
 function typeLabel(type: ScheduleType): string {

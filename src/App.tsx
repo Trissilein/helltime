@@ -17,6 +17,7 @@ import {
   setOverlayWindowVisible
 } from "./lib/overlay_window";
 import { clearOverlayDiag, readOverlayDiag } from "./lib/overlay_diag";
+import { findNext } from "./lib/helpers";
 
 type FiredMap = Record<string, number>;
 
@@ -66,21 +67,6 @@ function spokenTypeLabel(type: ScheduleType): string {
     case "world_boss":
       return "Weltscheff";
   }
-}
-
-function findNext<T extends { startTime: string }>(items: T[], now: number): T | null {
-  let best: T | null = null;
-  let bestStartMs = Number.POSITIVE_INFINITY;
-  for (const item of items) {
-    const startMs = new Date(item.startTime).getTime();
-    if (!Number.isFinite(startMs)) continue;
-    if (startMs <= now) continue;
-    if (startMs < bestStartMs) {
-      best = item;
-      bestStartMs = startMs;
-    }
-  }
-  return best;
 }
 
 function getEventName(type: ScheduleType, item: { startTime: string } | null): string {
@@ -1051,7 +1037,7 @@ export default function App() {
                                 />
                               </div>
 
-                              <label className="toggle" style={{ flexShrink: 0, marginLeft: 'auto', marginTop: '5px' }}>
+                              <label className="toggle" style={{ flexShrink: 0, marginLeft: 'auto', marginTop: '12px' }}>
                                 <input
                                   type="checkbox"
                                   checked={timer.ttsEnabled}
