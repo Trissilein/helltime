@@ -1036,6 +1036,7 @@ export default function App() {
                               <div className="field" style={{ flex: '0 1 200px', minWidth: '140px' }}>
                                 <label>
                                   Minuten vorher: <span className="pill">{timer.minutesBefore} min</span>
+                                  <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginLeft: '4px' }}>· 5 min Schritte</span>
                                 </label>
                                 <input
                                   type="range"
@@ -1074,6 +1075,7 @@ export default function App() {
                               <div className="field" style={{ flex: '0 1 200px', minWidth: '140px' }}>
                                 <label className="pitchRow">
                                   Tonhöhe: <span className="pill">{timer.pitchHz} Hz</span>
+                                  <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginLeft: '4px' }}>· 100 Hz Schritte</span>
                                 </label>
                                 <input
                                   type="range"
