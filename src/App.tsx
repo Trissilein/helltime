@@ -1035,16 +1035,19 @@ export default function App() {
                             <div className="timerRow">
                               <div className="field" style={{ flex: '0 1 200px', minWidth: '140px' }}>
                                 <label>
-                                  Minuten vorher: <span className="pill">{timer.minutesBefore} min</span>
+                                  {timer.minutesBefore === 0 ? 'Trigger: ' : 'Minuten vorher: '}
+                                  <span className="pill">
+                                    {timer.minutesBefore === 0 ? 'now!' : `${timer.minutesBefore} min`}
+                                  </span>
                                   <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginLeft: '4px' }}>· 5 min Schritte</span>
                                 </label>
                                 <input
                                   type="range"
-                                  min={5}
+                                  min={0}
                                   max={60}
                                   step={5}
                                   value={timer.minutesBefore}
-                                  onChange={(e) => updateTimer(type, i, { minutesBefore: clampInt(Number(e.target.value), 5, 60) })}
+                                  onChange={(e) => updateTimer(type, i, { minutesBefore: clampInt(Number(e.target.value), 0, 60) })}
                                 />
                               </div>
 
