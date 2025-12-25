@@ -896,11 +896,18 @@ input[type="color"]:focus-visible {
 
 .panelHeaderBtn::after {
   content: "▸";
-  color: var(--text-tertiary);
-  margin-left: var(--space-2); /* 4px - was 8px */
+  color: rgba(212, 175, 55, 0.7);
+  margin-left: var(--space-3); /* 6px - increase for visibility */
   transform: rotate(0deg);
   transition: transform 180ms var(--ease-swift);
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: var(--font-bold);
+  flex: 0 0 auto;
+}
+
+.panelHeaderBtn:hover::after {
+  color: rgba(212, 175, 55, 1);
+  text-shadow: 0 0 6px rgba(212, 175, 55, 0.4);
 }
 
 .panelHeaderBtn[aria-expanded="true"]::after {
