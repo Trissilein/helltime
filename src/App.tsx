@@ -1092,7 +1092,7 @@ export default function App() {
                                 type="button"
                                 aria-label="Ton testen"
                                 title="Ton testen"
-                                style={{ flexShrink: 0 }}
+                                style={{ flexShrink: 0, marginLeft: 'auto' }}
                                 disabled={!settings.soundEnabled}
                                 onClick={() => {
                                   if (panicStopEnabled) return;
