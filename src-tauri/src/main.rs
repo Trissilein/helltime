@@ -124,7 +124,7 @@ fn restore_window(window: &tauri::WebviewWindow) {
 }
 
 /// Hide window to tray using Window type (from on_window_event)
-fn hide_window_to_tray_v2(window: &tauri::Window, app_handle: &tauri::AppHandle) {
+fn hide_window_to_tray_v2(window: &tauri::Window, _app_handle: &tauri::AppHandle) {
     let state = get_window_state();
     let _lock = state.acquire_lock();
 
@@ -139,10 +139,8 @@ fn hide_window_to_tray_v2(window: &tauri::Window, app_handle: &tauri::AppHandle)
     let _ = window.hide();
     let _ = window.set_skip_taskbar(true);
 
-    // Also hide overlay
-    if let Some(overlay) = app_handle.get_webview_window("overlay") {
-        let _ = overlay.hide();
-    }
+    // Note: Overlay visibility is managed independently by the frontend
+    // based on user settings, not coupled to main window state
 
     state.set_visibility(WindowVisibility::Hidden);
     state.end_transition();
@@ -151,7 +149,7 @@ fn hide_window_to_tray_v2(window: &tauri::Window, app_handle: &tauri::AppHandle)
 }
 
 /// Hide window to tray using WebviewWindow type (from tray click)
-fn hide_window_to_tray(window: &tauri::WebviewWindow, app_handle: &tauri::AppHandle) {
+fn hide_window_to_tray(window: &tauri::WebviewWindow, _app_handle: &tauri::AppHandle) {
     let state = get_window_state();
 
     // Skip if already hidden
@@ -172,10 +170,8 @@ fn hide_window_to_tray(window: &tauri::WebviewWindow, app_handle: &tauri::AppHan
     let _ = window.hide();
     let _ = window.set_skip_taskbar(true);
 
-    // Also hide overlay
-    if let Some(overlay) = app_handle.get_webview_window("overlay") {
-        let _ = overlay.hide();
-    }
+    // Note: Overlay visibility is managed independently by the frontend
+    // based on user settings, not coupled to main window state
 
     state.set_visibility(WindowVisibility::Hidden);
     state.end_transition();
