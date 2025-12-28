@@ -16,7 +16,8 @@
         "title": "helltime",
         "width": 380,
         "height": 720,
-        "resizable": true
+        "resizable": true,
+        "skipTaskbar": false
       }
     ]
   },

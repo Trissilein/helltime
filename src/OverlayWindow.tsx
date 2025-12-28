@@ -221,7 +221,9 @@ export default function OverlayWindow() {
     return now - toast.shownAt < ms;
   }, [toast, now]);
 
-  const mode = settings.overlayWindowMode === "toast" ? "toast" : "overview";
+  // If we're in overview mode but a toast is visible, show toast instead (prevent overlap)
+  const effectiveMode = toast && toastVisible ? "toast" : settings.overlayWindowMode === "toast" ? "toast" : "overview";
+  const mode = effectiveMode;
   const overviewEmpty = mode === "overview" && ordered.length === 0 && !positioning;
 
   useEffect(() => {

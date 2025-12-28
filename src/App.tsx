@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
+import { emit, listen } from "@tauri-apps/api/event";
 import { fetchSchedule } from "./lib/helltides";
 import { formatCountdown, formatLocalTime } from "./lib/time";
 import { loadSettings, saveSettings, type BeepPattern, type Settings, type TimerSettings } from "./lib/settings";
@@ -104,7 +105,7 @@ function clampInt(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.round(n)));
 }
 
-const OPACITY_GAMMA = 2.6;
+const OPACITY_GAMMA = 1.3;
 function opacityToSlider(alpha: number): number {
   const a = Math.max(0, Math.min(1, alpha));
   return clampInt(Math.round(Math.pow(a, 1 / OPACITY_GAMMA) * 100), 0, 100);
@@ -221,6 +222,98 @@ export default function App() {
     window.addEventListener("helltime:panic-stop", onPanic);
     return () => window.removeEventListener("helltime:panic-stop", onPanic);
   }, []);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+
+    let unlistenOverlay: (() => void) | null = null;
+    let unlistenReminder: (() => void) | null = null;
+
+    void (async () => {
+      unlistenOverlay = await listen("menu:toggle-overlay", () => {
+        updateSettings((prev) => ({
+          ...prev,
+          overlayWindowEnabled: !prev.overlayWindowEnabled,
+        }));
+      });
+
+      unlistenReminder = await listen("menu:toggle-reminder", () => {
+        updateSettings((prev) => {
+          const ARCHIVE_KEY = "helltime:reminder_archive";
+          const anyEnabled =
+            prev.categories.helltide.enabled ||
+            prev.categories.legion.enabled ||
+            prev.categories.world_boss.enabled;
+
+          if (anyEnabled) {
+            // Archive current state and disable all
+            const archive = {
+              helltide: prev.categories.helltide.enabled,
+              legion: prev.categories.legion.enabled,
+              world_boss: prev.categories.world_boss.enabled,
+            };
+            localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archive));
+
+            return {
+              ...prev,
+              categories: {
+                ...prev.categories,
+                helltide: { ...prev.categories.helltide, enabled: false },
+                legion: { ...prev.categories.legion, enabled: false },
+                world_boss: { ...prev.categories.world_boss, enabled: false },
+              },
+            };
+          } else {
+            // Restore from archive (or enable all if no archive)
+            let archive = { helltide: true, legion: true, world_boss: true };
+            try {
+              const stored = localStorage.getItem(ARCHIVE_KEY);
+              if (stored) {
+                const parsed = JSON.parse(stored);
+                archive = {
+                  helltide: typeof parsed.helltide === "boolean" ? parsed.helltide : true,
+                  legion: typeof parsed.legion === "boolean" ? parsed.legion : true,
+                  world_boss: typeof parsed.world_boss === "boolean" ? parsed.world_boss : true,
+                };
+              }
+            } catch {
+              // ignore parse errors
+            }
+
+            return {
+              ...prev,
+              categories: {
+                ...prev.categories,
+                helltide: { ...prev.categories.helltide, enabled: archive.helltide },
+                legion: { ...prev.categories.legion, enabled: archive.legion },
+                world_boss: { ...prev.categories.world_boss, enabled: archive.world_boss },
+              },
+            };
+          }
+        });
+      });
+    })();
+
+    return () => {
+      unlistenOverlay?.();
+      unlistenReminder?.();
+    };
+  }, []);
+
+  // Sync menu checkbox states with Rust backend
+  useEffect(() => {
+    if (!isTauri()) return;
+
+    // Update overlay checkbox in tray menu
+    void emit("menu:update-overlay-state", settings.overlayWindowEnabled);
+
+    // Update reminder checkbox - checked if ANY category is enabled
+    const anyReminderEnabled =
+      settings.categories.helltide.enabled ||
+      settings.categories.legion.enabled ||
+      settings.categories.world_boss.enabled;
+    void emit("menu:update-reminder-state", anyReminderEnabled);
+  }, [settings.overlayWindowEnabled, settings.categories]);
 
   useEffect(() => {
     lastSettingsRef.current = settings;
@@ -812,6 +905,7 @@ export default function App() {
 	                    </label>
 	                    <input
 	                      type="range"
+	                      list="opacityTicks"
 	                      min={0}
 	                      max={100}
 	                      step={1}
@@ -823,6 +917,19 @@ export default function App() {
 	                        }))
 	                      }
 	                    />
+	                    <datalist id="opacityTicks">
+	                      <option value="0" />
+	                      <option value="10" />
+	                      <option value="20" />
+	                      <option value="30" />
+	                      <option value="40" />
+	                      <option value="50" />
+	                      <option value="60" />
+	                      <option value="70" />
+	                      <option value="80" />
+	                      <option value="90" />
+	                      <option value="100" />
+	                    </datalist>
 	                  </div>
 	                </div>
 

@@ -65,7 +65,7 @@ export function disablePanicStop(): void {
 export function startUiWatchdog(): void {
   if (watchdogTimer) return;
   watchdogBadCount = 0;
-  watchdogArmedAt = Date.now() + 5000;
+  watchdogArmedAt = Date.now() + 15000;
 
   watchdogTimer = window.setInterval(() => {
     if (isPanicStopEnabled()) return;
@@ -82,8 +82,11 @@ export function startUiWatchdog(): void {
     }
 
     watchdogBadCount++;
-    if (watchdogBadCount >= 3) {
-      void enablePanicStop(new Error("UI watchdog tripped"));
+    const diagnostic = !container ? "no .container" : !rect ? "no rect" : `${rect.width}x${rect.height}`;
+    if (watchdogBadCount >= 10) {
+      const reason = `UI watchdog: ${watchdogBadCount} fails (${diagnostic})`;
+      console.error("helltime:", reason);
+      void enablePanicStop(new Error(reason));
     }
   }, 1500);
 }

@@ -22,12 +22,19 @@ function readBounds(storageKey: string): WindowBounds | null {
     const minW = isOverlay ? 120 : 240;
     const minH = isOverlay ? 60 : 180;
 
-    return {
-      x: Math.round(obj.x),
-      y: Math.round(obj.y),
-      w: clampInt(obj.w, minW, maxW),
-      h: clampInt(obj.h, minH, maxH)
-    };
+    // Clamp position to reasonable screen bounds to prevent off-screen windows
+    // Be MORE aggressive: position must be on-screen or just barely off-screen
+    const maxX = 3840; // 4K max
+    const maxY = 2160; // 4K max
+    const minX = 0;    // Never allow negative X
+    const minY = 0;    // Never allow negative Y
+
+    const x = clampInt(obj.x, minX, maxX);
+    const y = clampInt(obj.y, minY, maxY);
+    const w = clampInt(obj.w, minW, maxW);
+    const h = clampInt(obj.h, minH, maxH);
+
+    return { x, y, w, h };
   } catch {
     return null;
   }
@@ -52,8 +59,20 @@ export async function initWindowPersistence(storageKey: string): Promise<void> {
       try {
         await win.setSize(new PhysicalSize(saved.w, saved.h));
         await win.setPosition(new PhysicalPosition(saved.x, saved.y));
-      } catch {
-        // ignore
+      } catch (e) {
+        // If position/size fails, clear corrupted data and use defaults
+        console.warn(`Failed to apply window bounds for "${storageKey}": ${e}`);
+        try {
+          localStorage.removeItem(storageKey);
+        } catch {
+          // ignore
+        }
+        // Center window as fallback (Windows API will center it)
+        try {
+          await win.center();
+        } catch {
+          // ignore
+        }
       }
     }
 
