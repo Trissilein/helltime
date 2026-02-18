@@ -29,7 +29,9 @@ Get-Content ".\SHA256SUMS.txt"
 - Pro Kategorie konfigurierbare Reminder (TTS-Name, Beep-Pattern, Timing, Tonhoehe).
 - Automatischer Daten-Refresh in regelmaessigen Intervallen.
 
-## Voraussetzungen
+## Voraussetzungen (nur fuer Development/Contributing)
+
+Als End-User brauchst du keine lokale Toolchain. Fuer die Nutzung reicht der Installer aus dem Download-Abschnitt.
 
 - Node.js >= 20 und npm
 - Rust stable (inkl. `cargo`)
@@ -63,6 +65,6 @@ Der aktuelle Fokus liegt auf der Desktop-App; Android bleibt eine optionale spae
 - `helltime` is a desktop reminder for Diablo 4 Helltide, Legion, and World Boss events.
 - Download links: EXE https://github.com/Trissilein/helltime/releases/latest/download/helltime-setup-x64.exe, MSI https://github.com/Trissilein/helltime/releases/latest/download/helltime-installer-x64.msi, Checksums https://github.com/Trissilein/helltime/releases/latest/download/SHA256SUMS.txt
 - Data source: `https://helltides.com/api/schedule`
-- Local dev: `npm install` then `npm run tauri dev`
+- Developer setup only: `npm install` then `npm run tauri dev`
 - Build: `npm run tauri build`
 - Platform focus is desktop; Android may be explored later.
