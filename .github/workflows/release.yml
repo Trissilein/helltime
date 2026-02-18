@@ -1,0 +1,71 @@
+name: release-windows-installer
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows installers (NSIS + MSI)
+        run: npm run tauri build -- --bundles nsis,msi
+
+      - name: Collect release assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path release-assets -Force | Out-Null
+
+          $exe = Get-ChildItem -Path "src-tauri/target/release/bundle/nsis" -Filter "*-setup.exe" -File | Select-Object -First 1
+          if (-not $exe) { throw "NSIS installer (.exe) not found in src-tauri/target/release/bundle/nsis." }
+
+          $msi = Get-ChildItem -Path "src-tauri/target/release/bundle/msi" -Filter "*.msi" -File | Select-Object -First 1
+          if (-not $msi) { throw "MSI installer not found in src-tauri/target/release/bundle/msi." }
+
+          Copy-Item -Path $exe.FullName -Destination "release-assets/helltime-setup-x64.exe"
+          Copy-Item -Path $msi.FullName -Destination "release-assets/helltime-installer-x64.msi"
+
+      - name: Generate SHA-256 checksums
+        shell: pwsh
+        run: |
+          $files = @(
+            "release-assets/helltime-setup-x64.exe",
+            "release-assets/helltime-installer-x64.msi"
+          )
+
+          $lines = foreach ($file in $files) {
+            $hash = (Get-FileHash -Path $file -Algorithm SHA256).Hash.ToLower()
+            "$hash  $(Split-Path -Leaf $file)"
+          }
+
+          $lines | Set-Content -Path "release-assets/SHA256SUMS.txt"
+
+      - name: Create GitHub release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/helltime-setup-x64.exe
+            release-assets/helltime-installer-x64.msi
+            release-assets/SHA256SUMS.txt

@@ -64,6 +64,22 @@ Falls Overlay/Einstellungen „nichts machen“ oder die Konsole `not allowed` m
 npm run tauri build
 ```
 
+## Download / Installation (Windows)
+
+- Setup-Installer (EXE): https://github.com/Trissilein/helltime/releases/latest/download/helltime-setup-x64.exe
+- MSI-Installer: https://github.com/Trissilein/helltime/releases/latest/download/helltime-installer-x64.msi
+- SHA-256 Checksums: https://github.com/Trissilein/helltime/releases/latest/download/SHA256SUMS.txt
+
+Hinweis: Die Installer sind derzeit nicht code-signiert. Windows SmartScreen kann beim ersten Start eine Warnung anzeigen.
+
+PowerShell-Check der Downloads:
+
+```powershell
+Invoke-WebRequest -Uri "https://github.com/Trissilein/helltime/releases/latest/download/SHA256SUMS.txt" -OutFile ".\SHA256SUMS.txt"
+Get-FileHash ".\helltime-setup-x64.exe" -Algorithm SHA256
+Get-FileHash ".\helltime-installer-x64.msi" -Algorithm SHA256
+```
+
 ## Nächste Schritte (Android)
 
 Tauri Mobile ist (je nach Tauri-Version) als nächster Schritt möglich; sobald du soweit bist, sag kurz Bescheid, dann verdrahten wir das Projekt für Android (Gradle, Permissions, Notification-Verhalten, etc.).
