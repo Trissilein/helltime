@@ -56,9 +56,9 @@ npm run tauri build
 - Das Overlay ist standardmaessig click-through und wird beim Schliessen des Main-Fensters beendet.
 - Bei fehlerhafter Overlay-Position die `Reset`-Funktion in den Benachrichtigungseinstellungen verwenden.
 
-## Roadmap
+## Aktueller Fokus
 
-Der aktuelle Fokus liegt auf der Desktop-App; Android bleibt eine optionale spaetere Erweiterung.
+Aktuell liegt der Fokus auf Interface-Polishing und UX-Feinschliff der Desktop-App.
 
 ## English (Short)
 
@@ -67,4 +67,4 @@ Der aktuelle Fokus liegt auf der Desktop-App; Android bleibt eine optionale spae
 - Data source: `https://helltides.com/api/schedule`
 - Developer setup only: `npm install` then `npm run tauri dev`
 - Build: `npm run tauri build`
-- Platform focus is desktop; Android may be explored later.
+- Current focus: interface polishing and desktop UX refinements.
