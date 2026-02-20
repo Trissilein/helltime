@@ -5,6 +5,19 @@ Die App zeigt kommende Helltide-, Legion- und World-Boss-Termine mit konfigurier
 
 Datenquelle: `https://helltides.com/api/schedule`
 
+## Danksagung / Acknowledgements
+
+Ein riesiges Dankeschoen an **helltides.com** fuer die Bereitstellung der Event-Datenquelle,
+ohne die diese App in der Form nicht moeglich waere.
+
+`helltime` nutzt ausserdem zentrale Open-Source-Bausteine:
+
+- `tauri-apps/tauri` (Desktop Runtime)
+- `react` / `react-dom` (UI)
+- `vite` (Build Tooling)
+
+Volle Third-Party- und Lizenzhinweise: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+
 ## Download (Windows)
 
 - Setup-Installer (EXE): https://github.com/Trissilein/helltime/releases/latest/download/helltime-setup-x64.exe
