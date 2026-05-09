@@ -986,6 +986,26 @@ export default function App() {
                         <option value="100" />
                       </datalist>
                     </div>
+
+                    <div className="field">
+                      <label>
+                        Zeilen-Hintergrund <span className="pill">{Math.round(settings.overlayLineBgOpacity * 100)}%</span>
+                      </label>
+                      <input
+                        type="range"
+                        list="opacityTicks"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={opacityToSlider(settings.overlayLineBgOpacity)}
+                        onChange={(e) =>
+                          updateSettings((s) => ({
+                            ...s,
+                            overlayLineBgOpacity: sliderToOpacity(clampInt(Number(e.target.value), 0, 100))
+                          }))
+                        }
+                      />
+                    </div>
                   </div>
                 </div>
 

@@ -1,8 +1,9 @@
 [package]
 name = "helltime"
-version = "0.2.0"
+version = "0.2.1"
 description = "Helltide reminder (desktop, later mobile)"
 authors = ["you"]
+license = "MIT"
 edition = "2021"
 
 [build-dependencies]

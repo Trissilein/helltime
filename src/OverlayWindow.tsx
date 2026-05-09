@@ -225,6 +225,7 @@ export default function OverlayWindow() {
     positioningRef.current = positioning;
   }, [positioning]);
   const bgAlpha = positioning ? 1 : clampFloat(settings.overlayBgOpacity, 0.2, 0, 1.0);
+  const lineBgAlpha = positioning ? 0.9 : clampFloat(settings.overlayLineBgOpacity, 0.72, 0, 1.0);
   const bgHex = positioning ? invertHexColor(settings.overlayBgHex) : settings.overlayBgHex;
   const bg = hexToRgba(bgHex, bgAlpha);
 
@@ -364,7 +365,9 @@ export default function OverlayWindow() {
       style={{
         background:
           (mode === "toast" && !toastVisible && !positioning) || overviewEmpty ? "rgba(0,0,0,0)" : bg,
-        ["--overlayScale" as any]: String(contentScale)
+        ["--overlayScale" as any]: String(contentScale),
+        ["--overlayLineBgOpacity" as any]: String(lineBgAlpha),
+        ["--overlayLineBgOpacityStrong" as any]: String(Math.min(lineBgAlpha + 0.14, 1))
       }}
       ref={hostRef}
     >

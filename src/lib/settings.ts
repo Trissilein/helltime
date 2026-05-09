@@ -31,6 +31,7 @@ export type Settings = {
   overlayScaleX: number; // 0.6-2.0
   overlayScaleY: number; // 0.6-2.0
   overlayBgOpacity: number; // 0-1.0
+  overlayLineBgOpacity: number; // 0-1.0
   categories: Record<ScheduleType, CategorySettings>;
 };
 
@@ -70,6 +71,7 @@ const defaults: Settings = {
   overlayScaleX: 1,
   overlayScaleY: 1,
   overlayBgOpacity: 0.2,
+  overlayLineBgOpacity: 0.72,
   categories: {
     helltide: { ...defaultCategory(true), ttsName: "Höllenhochwasser" },
     legion: { ...defaultCategory(true), ttsName: "Legionellen" },
@@ -193,6 +195,7 @@ export function loadSettings(): Settings {
       overlayScaleX: clampFloat(raw.overlayScaleX, clampFloat(raw.overlayScale, defaults.overlayScaleX, 0.6, 2.0), 0.6, 2.0),
       overlayScaleY: clampFloat(raw.overlayScaleY, clampFloat(raw.overlayScale, defaults.overlayScaleY, 0.6, 2.0), 0.6, 2.0),
       overlayBgOpacity: clampFloat(raw.overlayBgOpacity, defaults.overlayBgOpacity, 0, 1.0),
+      overlayLineBgOpacity: clampFloat(raw.overlayLineBgOpacity, defaults.overlayLineBgOpacity, 0, 1.0),
       categories: {
         helltide: normalizeCategory(rawCategories.helltide, defaults.categories.helltide),
         legion: normalizeCategory(rawCategories.legion, defaults.categories.legion),
@@ -221,6 +224,7 @@ export function loadSettings(): Settings {
       overlayScaleX: defaults.overlayScaleX,
       overlayScaleY: defaults.overlayScaleY,
       overlayBgOpacity: defaults.overlayBgOpacity,
+      overlayLineBgOpacity: defaults.overlayLineBgOpacity,
       categories: {
         helltide: normalizeCategory(v4raw.categories?.helltide, defaults.categories.helltide),
         legion: normalizeCategory(v4raw.categories?.legion, defaults.categories.legion),
@@ -248,6 +252,7 @@ export function loadSettings(): Settings {
       overlayScaleX: defaults.overlayScaleX,
       overlayScaleY: defaults.overlayScaleY,
       overlayBgOpacity: defaults.overlayBgOpacity,
+      overlayLineBgOpacity: defaults.overlayLineBgOpacity,
       categories: {
         helltide: normalizeCategory(v3.categories?.helltide, defaults.categories.helltide),
         legion: normalizeCategory(v3.categories?.legion, defaults.categories.legion),
@@ -279,6 +284,7 @@ export function loadSettings(): Settings {
       overlayScaleX: defaults.overlayScaleX,
       overlayScaleY: defaults.overlayScaleY,
       overlayBgOpacity: defaults.overlayBgOpacity,
+      overlayLineBgOpacity: defaults.overlayLineBgOpacity,
       categories: {
         helltide: {
           enabled: typeof enabled.helltide === "boolean" ? enabled.helltide : true,
@@ -326,6 +332,7 @@ export function loadSettings(): Settings {
       overlayScaleX: defaults.overlayScaleX,
       overlayScaleY: defaults.overlayScaleY,
       overlayBgOpacity: defaults.overlayBgOpacity,
+      overlayLineBgOpacity: defaults.overlayLineBgOpacity,
       categories: {
         helltide: { enabled, ttsName: defaults.categories.helltide.ttsName, timerCount: 1, timers },
         legion: { ...defaultCategory(false) },

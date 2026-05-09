@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-Last updated: 2026-02-20
+Last updated: 2026-05-09
 
 This document lists important third-party services/frameworks used by helltime.
 It is not legal advice and not a full transitive dependency inventory.
@@ -12,6 +12,11 @@ A special and explicit thank-you to **helltides.com** for the event schedule dat
 
 - API endpoint used by this project: `https://helltides.com/api/schedule`
 - helltime depends on this source for Helltide/Legion/World Boss timing data.
+
+## Trademark / Affiliation Note
+
+- `Diablo`, `Diablo IV`, `Vessel of Hatred`, and `Lord of Hatred` are trademarks of Blizzard Entertainment, Inc.
+- helltime is an independent fan-made utility and is not affiliated with or endorsed by Blizzard Entertainment.
 
 ## Third-Party Frameworks and Libraries
 
