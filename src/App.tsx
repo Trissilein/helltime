@@ -18,12 +18,14 @@ import {
   setOverlayWindowVisible
 } from "./lib/overlay_window";
 import { clearOverlayDiag, readOverlayDiag } from "./lib/overlay_diag";
+import { openExternalUrl } from "./lib/external";
 import { findNext } from "./lib/helpers";
 
 type FiredMap = Record<string, number>;
 
 const FIRED_KEY = "helltime:fired_v3";
 const OLD_FIRED_KEY = "helltime:fired_v2";
+const HELLTIDES_MAP_URL = "https://helltides.com/";
 
 function loadFired(): FiredMap {
   try {
@@ -79,11 +81,34 @@ function getEventName(type: ScheduleType, item: { startTime: string } | null): s
   return typeLabel(type);
 }
 
+function getWorldBossZoneNames(item: { startTime: string } | null): string[] {
+  if (!item) return [];
+  const zones = (item as WorldBossScheduleItem).zone ?? [];
+  const names = zones
+    .map((zone) => (typeof zone?.name === "string" ? zone.name.trim() : ""))
+    .filter(Boolean);
+  return Array.from(new Set(names));
+}
+
+function getWorldBossSubtitle(item: { startTime: string } | null): string | undefined {
+  if (!item) return undefined;
+  const boss = typeof (item as WorldBossScheduleItem).boss === "string" ? (item as WorldBossScheduleItem).boss.trim() : "";
+  const zones = getWorldBossZoneNames(item);
+  if (boss && zones.length > 0) return `${boss} · ${zones.join(", ")}`;
+  if (boss) return boss;
+  if (zones.length > 0) return zones.join(", ");
+  return undefined;
+}
+
+function getWorldBossLocationLabel(item: { startTime: string } | null): string {
+  const zones = getWorldBossZoneNames(item);
+  return zones.length > 0 ? zones.join(", ") : "Ort folgt";
+}
+
 function getEventTitleParts(type: ScheduleType, item: { startTime: string } | null): { title: string; subtitle?: string } {
   if (!item) return { title: typeLabel(type) };
   if (type === "world_boss") {
-    const boss = (item as WorldBossScheduleItem).boss;
-    return boss ? { title: "World Boss", subtitle: boss } : { title: "World Boss" };
+    return { title: "World Boss", subtitle: getWorldBossSubtitle(item) };
   }
   return { title: typeLabel(type) };
 }
@@ -751,19 +776,23 @@ export default function App() {
 
             <div className="modalBody">
               <div className="form">
-	                <div className="settingsBlock">
-	                  <div className="sectionTitle">Overlay</div>
-	
-	                  <div className="inline">
-	                    <div className="hint">Overlay</div>
-	                    <div className="pill small">{settings.overlayWindowEnabled ? "an" : "aus"}</div>
-	                  </div>
-	                  <div className="hint">An/Aus und Position unten rechts im Hauptfenster.</div>
-	
-	                  <div className="field">
-	                    <label className="hint">
-	                      Inhalt <span className="pill small">{settings.overlayWindowMode}</span>
-	                    </label>
+                <div className="settingsBlock">
+                  <div className="settingsBlockHeader">
+                    <div className="sectionTitle">Overlay Verhalten</div>
+                    <div className="settingsBlockHint">Anzeige, Inhalt und schnelles Positionieren des Ingame-Overlays.</div>
+                  </div>
+
+                  <div className="inline">
+                    <div className="hint">Status</div>
+                    <div className={`statusBadge ${settings.overlayWindowEnabled ? "on" : "off"}`}>
+                      {settings.overlayWindowEnabled ? "Overlay aktiv" : "Overlay aus"}
+                    </div>
+                  </div>
+
+                  <div className="field">
+                    <label className="hint">
+                      Inhalt <span className="pill small">{settings.overlayWindowMode}</span>
+                    </label>
                     <div className="toggleRow" style={{ marginBottom: 8 }}>
                       <label className="toggle">
                         <input
@@ -786,55 +815,85 @@ export default function App() {
                         <span className="toggleLabel">Toast</span>
                       </label>
                     </div>
-                    <div className="toggleRow">
-                      <label className="toggle">
-                        <input
-                          type="checkbox"
-                          disabled={panicStopEnabled || !settings.overlayWindowEnabled}
-                          checked={settings.overlayWindowCategories.legion}
-                          onChange={(e) =>
-                            updateSettings((s) => ({
-                              ...s,
-                              overlayWindowCategories: { ...s.overlayWindowCategories, legion: e.target.checked }
-                            }))
-                          }
-                        />
-                        <span className="toggleLabel">Legion</span>
-                      </label>
-                      <label className="toggle">
-                        <input
-                          type="checkbox"
-                          disabled={panicStopEnabled || !settings.overlayWindowEnabled}
-                          checked={settings.overlayWindowCategories.helltide}
-                          onChange={(e) =>
-                            updateSettings((s) => ({
-                              ...s,
-                              overlayWindowCategories: { ...s.overlayWindowCategories, helltide: e.target.checked }
-                            }))
-                          }
-                        />
-                        <span className="toggleLabel">Helltide</span>
-                      </label>
-                      <label className="toggle">
-                        <input
-                          type="checkbox"
-                          disabled={panicStopEnabled || !settings.overlayWindowEnabled}
-                          checked={settings.overlayWindowCategories.world_boss}
-                          onChange={(e) =>
-                            updateSettings((s) => ({
-                              ...s,
-                              overlayWindowCategories: { ...s.overlayWindowCategories, world_boss: e.target.checked }
-                            }))
-                          }
-                        />
-                        <span className="toggleLabel">World Boss</span>
-                      </label>
+
+                    <div className="field">
+                      <label className="hint">Angezeigte Kategorien</label>
+                      <div className="toggleRow">
+                        <label className="toggle">
+                          <input
+                            type="checkbox"
+                            disabled={panicStopEnabled || !settings.overlayWindowEnabled}
+                            checked={settings.overlayWindowCategories.legion}
+                            onChange={(e) =>
+                              updateSettings((s) => ({
+                                ...s,
+                                overlayWindowCategories: { ...s.overlayWindowCategories, legion: e.target.checked }
+                              }))
+                            }
+                          />
+                          <span className="toggleLabel">Legion</span>
+                        </label>
+                        <label className="toggle">
+                          <input
+                            type="checkbox"
+                            disabled={panicStopEnabled || !settings.overlayWindowEnabled}
+                            checked={settings.overlayWindowCategories.helltide}
+                            onChange={(e) =>
+                              updateSettings((s) => ({
+                                ...s,
+                                overlayWindowCategories: { ...s.overlayWindowCategories, helltide: e.target.checked }
+                              }))
+                            }
+                          />
+                          <span className="toggleLabel">Helltide</span>
+                        </label>
+                        <label className="toggle">
+                          <input
+                            type="checkbox"
+                            disabled={panicStopEnabled || !settings.overlayWindowEnabled}
+                            checked={settings.overlayWindowCategories.world_boss}
+                            onChange={(e) =>
+                              updateSettings((s) => ({
+                                ...s,
+                                overlayWindowCategories: { ...s.overlayWindowCategories, world_boss: e.target.checked }
+                              }))
+                            }
+                          />
+                          <span className="toggleLabel">World Boss</span>
+                        </label>
+                      </div>
                     </div>
                   </div>
 
+                  <div className="buttonRow">
+                    <button
+                      className="btn"
+                      type="button"
+                      disabled={panicStopEnabled || !settings.overlayWindowEnabled}
+                      onClick={() => previewOverlayToast()}
+                    >
+                      Vorschau
+                    </button>
+                    <button
+                      className="btn"
+                      type="button"
+                      disabled={panicStopEnabled || !settings.overlayWindowEnabled}
+                      onClick={() => void bringOverlayToFront()}
+                    >
+                      Positionieren
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settingsBlock">
+                  <div className="settingsBlockHeader">
+                    <div className="sectionTitle">Overlay Look</div>
+                    <div className="settingsBlockHint">Kontrast, Größe und Hintergrund so einstellen, dass das Overlay im Spiel lesbar bleibt.</div>
+                  </div>
+
                   <div className="inline">
-                    <div className="hint">Look</div>
-                    <div className="actions">
+                    <div className="hint">Hintergrundfarbe</div>
+                    <div className="buttonRow compact">
                       <input
                         type="color"
                         value={settings.overlayBgHex}
@@ -842,99 +901,99 @@ export default function App() {
                         title="Overlay Hintergrund"
                       />
                       <div className="pill">{settings.overlayBgHex}</div>
-                      <button
-                        className="btn"
-                        type="button"
-                        disabled={panicStopEnabled || !settings.overlayWindowEnabled}
-                        onClick={() => previewOverlayToast()}
-                      >
-                        Vorschau
-                      </button>
-                      <button
-                        className="btn"
-                        type="button"
-                        disabled={panicStopEnabled}
-                        onClick={() => void resetOverlayWindowBounds()}
-                      >
-                        Reset
-                      </button>
                     </div>
-	                  </div>
-	
-	                  <div className="field">
-	                    <label>
-	                      Breite <span className="pill">{Math.round(settings.overlayScaleX * 100)}%</span>
-	                    </label>
-	                    <input
-	                      type="range"
-	                      min={60}
-	                      max={200}
-	                      step={5}
-	                      value={Math.round(settings.overlayScaleX * 100)}
-	                      onChange={(e) =>
-	                        updateSettings((s) => ({
-	                          ...s,
-	                          overlayScaleX: clampInt(Number(e.target.value), 60, 200) / 100
-	                        }))
-	                      }
-	                    />
-	                  </div>
-	
-	                  <div className="field">
-	                    <label>
-	                      Höhe <span className="pill">{Math.round(settings.overlayScaleY * 100)}%</span>
-	                    </label>
-	                    <input
-	                      type="range"
-	                      min={60}
-	                      max={200}
-	                      step={5}
-	                      value={Math.round(settings.overlayScaleY * 100)}
-	                      onChange={(e) =>
-	                        updateSettings((s) => ({
-	                          ...s,
-	                          overlayScaleY: clampInt(Number(e.target.value), 60, 200) / 100
-	                        }))
-	                      }
-	                    />
-	                  </div>
-	
-	                  <div className="field">
-	                    <label>
-	                      Hintergrund-Transparenz <span className="pill">{Math.round(settings.overlayBgOpacity * 100)}%</span>
-	                    </label>
-	                    <input
-	                      type="range"
-	                      list="opacityTicks"
-	                      min={0}
-	                      max={100}
-	                      step={1}
-	                      value={opacityToSlider(settings.overlayBgOpacity)}
-	                      onChange={(e) =>
-	                        updateSettings((s) => ({
-	                          ...s,
-	                          overlayBgOpacity: sliderToOpacity(clampInt(Number(e.target.value), 0, 100))
-	                        }))
-	                      }
-	                    />
-	                    <datalist id="opacityTicks">
-	                      <option value="0" />
-	                      <option value="10" />
-	                      <option value="20" />
-	                      <option value="30" />
-	                      <option value="40" />
-	                      <option value="50" />
-	                      <option value="60" />
-	                      <option value="70" />
-	                      <option value="80" />
-	                      <option value="90" />
-	                      <option value="100" />
-	                    </datalist>
-	                  </div>
-	                </div>
+                  </div>
+
+                  <div className="buttonRow">
+                    <button
+                      className="btn"
+                      type="button"
+                      disabled={panicStopEnabled}
+                      onClick={() => void resetOverlayWindowBounds()}
+                    >
+                      Position zurücksetzen
+                    </button>
+                  </div>
+
+                  <div className="settingsControlGrid">
+                    <div className="field">
+                      <label>
+                        Breite <span className="pill">{Math.round(settings.overlayScaleX * 100)}%</span>
+                      </label>
+                      <input
+                        type="range"
+                        min={60}
+                        max={200}
+                        step={5}
+                        value={Math.round(settings.overlayScaleX * 100)}
+                        onChange={(e) =>
+                          updateSettings((s) => ({
+                            ...s,
+                            overlayScaleX: clampInt(Number(e.target.value), 60, 200) / 100
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <div className="field">
+                      <label>
+                        Höhe <span className="pill">{Math.round(settings.overlayScaleY * 100)}%</span>
+                      </label>
+                      <input
+                        type="range"
+                        min={60}
+                        max={200}
+                        step={5}
+                        value={Math.round(settings.overlayScaleY * 100)}
+                        onChange={(e) =>
+                          updateSettings((s) => ({
+                            ...s,
+                            overlayScaleY: clampInt(Number(e.target.value), 60, 200) / 100
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <div className="field">
+                      <label>
+                        Hintergrund-Transparenz <span className="pill">{Math.round(settings.overlayBgOpacity * 100)}%</span>
+                      </label>
+                      <input
+                        type="range"
+                        list="opacityTicks"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={opacityToSlider(settings.overlayBgOpacity)}
+                        onChange={(e) =>
+                          updateSettings((s) => ({
+                            ...s,
+                            overlayBgOpacity: sliderToOpacity(clampInt(Number(e.target.value), 0, 100))
+                          }))
+                        }
+                      />
+                      <datalist id="opacityTicks">
+                        <option value="0" />
+                        <option value="10" />
+                        <option value="20" />
+                        <option value="30" />
+                        <option value="40" />
+                        <option value="50" />
+                        <option value="60" />
+                        <option value="70" />
+                        <option value="80" />
+                        <option value="90" />
+                        <option value="100" />
+                      </datalist>
+                    </div>
+                  </div>
+                </div>
 
                 <div className="settingsBlock">
-                  <div className="sectionTitle">Ton</div>
+                  <div className="settingsBlockHeader">
+                    <div className="sectionTitle">Ton</div>
+                    <div className="settingsBlockHint">Lautstärke und Reminder-Audio für alle Event-Timer.</div>
+                  </div>
 
                   <div className="inline">
                     <div className="hint">Benachrichtigungs-Ton</div>
@@ -972,34 +1031,45 @@ export default function App() {
                   </div>
                 </div>
 
+                <div className="settingsBlock">
+                  <div className="settingsBlockHeader">
+                    <div className="sectionTitle">Event-spezifische Reminder</div>
+                    <div className="settingsBlockHint">Timer, TTS-Namen, Beep-Muster und Tonhöhe stellst du direkt in den Event-Karten unten ein.</div>
+                  </div>
+                </div>
+
                 <div className="modalFooter">
                   <button className="btn small" type="button" onClick={() => setDebugOpen((v) => !v)} aria-expanded={debugOpen}>
                     Debug
                   </button>
                 </div>
 
-	                {debugOpen ? (
-	                  <div className="settingsBlock">
-	                    <div className="sectionTitle">Debug</div>
-	                    <div className="actions">
-	                      <button className="btn" type="button" disabled={panicStopEnabled} onClick={() => void refreshOverlayDebug()}>
-	                        Overlay Status
-	                      </button>
-	                      <button
-	                        className="btn"
-	                        type="button"
-	                        disabled={panicStopEnabled}
-	                        onClick={() => {
-	                          clearOverlayDiag();
-	                          setOverlayDebug(null);
-	                        }}
-	                      >
-	                        Logs leeren
-	                      </button>
-	                    </div>
-	                    {overlayDebug ? <pre className="overlayDebugBox">{overlayDebug}</pre> : null}
-	                  </div>
-	                ) : null}
+                {debugOpen ? (
+                  <div className="settingsBlock">
+                    <div className="settingsBlockHeader">
+                      <div className="sectionTitle">Debug</div>
+                      <div className="settingsBlockHint">Sekundäre Werkzeuge für Overlay-Diagnose und Statusprüfung.</div>
+                    </div>
+
+                    <div className="buttonRow">
+                      <button className="btn" type="button" disabled={panicStopEnabled} onClick={() => void refreshOverlayDebug()}>
+                        Overlay Status
+                      </button>
+                      <button
+                        className="btn"
+                        type="button"
+                        disabled={panicStopEnabled}
+                        onClick={() => {
+                          clearOverlayDiag();
+                          setOverlayDebug(null);
+                        }}
+                      >
+                        Logs leeren
+                      </button>
+                    </div>
+                    {overlayDebug ? <pre className="overlayDebugBox">{overlayDebug}</pre> : null}
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
@@ -1040,11 +1110,17 @@ export default function App() {
                     <span className="categoryTitleMain">{titleParts.title}</span>
                     <span className={`categoryTitleSub ${titleParts.subtitle ? "" : "placeholder"}`}>{titleParts.subtitle ?? "—"}</span>
                   </span>
-                  <span className="panelHeaderMeta">{countdown}</span>
+                  <span className="panelHeaderMetaWrap">
+                    <span className="panelHeaderMetaLabel">In</span>
+                    <span className="panelHeaderMeta">{countdown}</span>
+                  </span>
                 </button>
                 <div className="panelHeaderRight">
-                  <div className="pill">{timeLabel}</div>
-                  <label className="toggle">
+                  <div className="categoryStatusRow">
+                    <span className={`statusBadge ${category.enabled ? "on" : "off"}`}>{category.enabled ? "Aktiv" : "Pausiert"}</span>
+                    <div className="pill categoryTimePill">{timeLabel}</div>
+                  </div>
+                  <label className="toggle categoryHeaderToggle">
                     <input
                       type="checkbox"
                       checked={category.enabled}
@@ -1058,6 +1134,28 @@ export default function App() {
               <div className="form">
                 {category.enabled && isOpen ? (
                   <>
+                    <div className="categorySummaryRow">
+                      <div className="categorySummaryItem">
+                        <span className="categorySummaryLabel">Nächster Start</span>
+                        <span className="categorySummaryValue">{timeLabel}</span>
+                      </div>
+                      {type === "world_boss" && next ? (
+                        <div className="categorySummaryItem">
+                          <span className="categorySummaryLabel">Ort</span>
+                          <span className="categorySummaryValue">{getWorldBossLocationLabel(next)}</span>
+                        </div>
+                      ) : null}
+                      {type === "helltide" ? (
+                        <button className="btn primary small" type="button" onClick={() => void openExternalUrl(HELLTIDES_MAP_URL)}>
+                          Map öffnen
+                        </button>
+                      ) : null}
+                    </div>
+
+                    {type === "helltide" ? (
+                      <div className="hint categoryActionHint">Live-Helltide und Mystery Chest direkt auf helltides.com öffnen.</div>
+                    ) : null}
+
                     <div className="inline" style={{ justifyContent: "space-between" }}>
                       <div className="hint">Timer Anzahl</div>
                       <select
@@ -1126,13 +1224,13 @@ export default function App() {
 
                           <div className="timerBody">
                             <div className="timerRow">
-                              <div className="field" style={{ flex: '0 1 200px', minWidth: '140px' }}>
+                              <div className="field timerField timerFieldWide">
                                 <label>
                                   {timer.minutesBefore === 0 ? 'Trigger: ' : 'Minuten vorher: '}
                                   <span className="pill">
                                     {timer.minutesBefore === 0 ? 'now!' : `${timer.minutesBefore} min`}
                                   </span>
-                                  <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginLeft: '4px' }}>· 5 min Schritte</span>
+                                  <span className="sliderHint">· 5 min Schritte</span>
                                 </label>
                                 <input
                                   type="range"
@@ -1144,7 +1242,7 @@ export default function App() {
                                 />
                               </div>
 
-                              <label className="toggle" style={{ flexShrink: 0, marginLeft: 'auto', marginTop: '12px' }}>
+                              <label className="toggle timerToggle">
                                 <input
                                   type="checkbox"
                                   checked={timer.ttsEnabled}
@@ -1153,7 +1251,7 @@ export default function App() {
                                 <span className="toggleLabel">TTS</span>
                               </label>
 
-                              <div className="field" style={{ flex: '0 0 auto', margin: 0, minWidth: '80px', textAlign: 'right' }}>
+                              <div className="field timerField timerFieldCompact timerFieldRight">
                                 <label>Beep</label>
                                 <select
                                   className="select"
@@ -1168,10 +1266,10 @@ export default function App() {
                             </div>
 
                             <div className="timerRow">
-                              <div className="field" style={{ flex: '0 1 200px', minWidth: '140px' }}>
+                              <div className="field timerField timerFieldWide">
                                 <label className="pitchRow">
                                   Tonhöhe: <span className="pill">{timer.pitchHz} Hz</span>
-                                  <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginLeft: '4px' }}>· 100 Hz Schritte</span>
+                                  <span className="sliderHint">· 100 Hz Schritte</span>
                                 </label>
                                 <input
                                   type="range"

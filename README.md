@@ -39,7 +39,9 @@ Get-Content ".\SHA256SUMS.txt"
 
 - Event-Timer fuer Helltide, Legion und World Boss mit frei waehlbaren Vorwarnzeiten.
 - Overlay-Benachrichtigungen als dauerhafte Overview oder als Toast-Ansicht.
+- Besser lesbares Overlay mit staerkerem Kontrast, klareren Countdowns und ruhigerer Zeilenstruktur.
 - Pro Kategorie konfigurierbare Reminder (TTS-Name, Beep-Pattern, Timing, Tonhoehe).
+- World Boss zeigt Bossname plus Ort, und die Helltide-Karte oeffnet direkt die Live-Map auf helltides.com.
 - Automatischer Daten-Refresh in regelmaessigen Intervallen.
 
 ## Voraussetzungen (nur fuer Development/Contributing)
@@ -69,9 +71,9 @@ npm run tauri build
 - Das Overlay ist standardmaessig click-through und wird beim Schliessen des Main-Fensters beendet.
 - Bei fehlerhafter Overlay-Position die `Reset`-Funktion in den Benachrichtigungseinstellungen verwenden.
 
-## Aktueller Fokus
+## Aktueller Stand
 
-Aktuell liegt der Fokus auf Interface-Polishing und UX-Feinschliff der Desktop-App.
+Die aktuelle Version fokussiert sich auf ein lesbareres Overlay, aufgeraeumte Konfiguration und schnelleren Zugriff auf relevante Event-Kontexte.
 
 ## English (Short)
 
@@ -80,4 +82,4 @@ Aktuell liegt der Fokus auf Interface-Polishing und UX-Feinschliff der Desktop-A
 - Data source: `https://helltides.com/api/schedule`
 - Developer setup only: `npm install` then `npm run tauri dev`
 - Build: `npm run tauri build`
-- Current focus: interface polishing and desktop UX refinements.
+- Current focus: clearer overlay readability, cleaner configuration, and faster event context access.

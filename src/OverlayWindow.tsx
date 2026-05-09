@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { fetchSchedule } from "./lib/helltides";
 import { loadSettings } from "./lib/settings";
-import { formatCountdown, formatLocalTime } from "./lib/time";
+import { formatCountdown } from "./lib/time";
 import type { ScheduleResponse, ScheduleType, WorldBossScheduleItem } from "./lib/types";
 import { findNext } from "./lib/helpers";
 
@@ -53,11 +53,24 @@ function typeLabel(type: ScheduleType): string {
   }
 }
 
+function getWorldBossZoneNames(item: { startTime: string } | null): string[] {
+  if (!item) return [];
+  const zones = (item as WorldBossScheduleItem).zone ?? [];
+  const names = zones
+    .map((zone) => (typeof zone?.name === "string" ? zone.name.trim() : ""))
+    .filter(Boolean);
+  return Array.from(new Set(names));
+}
+
 function getEventName(type: ScheduleType, item: { startTime: string } | null): { title: string; subtitle?: string } {
   if (!item) return { title: typeLabel(type) };
   if (type === "world_boss") {
-    const boss = (item as WorldBossScheduleItem).boss;
-    return boss ? { title: "World Boss", subtitle: boss } : { title: "World Boss" };
+    const boss = typeof (item as WorldBossScheduleItem).boss === "string" ? (item as WorldBossScheduleItem).boss.trim() : "";
+    const zones = getWorldBossZoneNames(item);
+    if (boss && zones.length > 0) return { title: "World Boss", subtitle: `${boss} · ${zones.join(", ")}` };
+    if (boss) return { title: "World Boss", subtitle: boss };
+    if (zones.length > 0) return { title: "World Boss", subtitle: zones.join(", ") };
+    return { title: "World Boss" };
   }
   return { title: typeLabel(type) };
 }
@@ -272,11 +285,11 @@ export default function OverlayWindow() {
           const contentH = Math.ceil(contentRef.current?.scrollHeight ?? hostRef.current.scrollHeight);
 
           // Step 1: width follows X.
-          const baseW = 280;
+          const baseW = 304;
           const w = Math.max(170, Math.round(baseW * currentScaleX));
 
           // Step 2: height follows Y (but never clip content).
-          const baseH = 118;
+          const baseH = 132;
           const hTarget = Math.max(56, Math.round(baseH * currentScaleY));
           const h = Math.max(hTarget, Math.max(40, contentH + 8));
           if (Math.abs(w - lastW) <= 1 && Math.abs(h - lastH) <= 1) return;
