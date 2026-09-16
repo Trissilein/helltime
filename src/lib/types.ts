@@ -9,7 +9,7 @@ export type ScheduleItemBase = {
 
 export type WorldBossScheduleItem = ScheduleItemBase & {
   type: "world_boss";
-  boss: string;
+  boss?: string;
   zone?: Array<{
     id: string;
     name: string;
@@ -31,4 +31,3 @@ export type ScheduleResponse = {
   legion: LegionScheduleItem[];
   helltide: HelltideScheduleItem[];
 };
-

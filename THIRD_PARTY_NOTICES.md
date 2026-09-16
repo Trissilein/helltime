@@ -1,17 +1,20 @@
 # Third-Party Notices
 
-Last updated: 2026-05-09
+Last updated: 2026-09-16
 
 This document lists important third-party services/frameworks used by helltime.
 It is not legal advice and not a full transitive dependency inventory.
 For full dependency inventories, see `package.json` and `src-tauri/Cargo.lock`.
 
-## Special Thanks
+## Schedule Cadence Provenance
 
-A special and explicit thank-you to **helltides.com** for the event schedule data source:
+The local event generator uses cadence rules verified against the public **helltides.com** schedule on 2026-09-16:
 
-- API endpoint used by this project: `https://helltides.com/api/schedule`
-- helltime depends on this source for Helltide/Legion/World Boss timing data.
+- Helltide: each UTC hour, 55 minutes active.
+- Legion: every 25 minutes from `2026-09-16T19:50:00Z`.
+- World Boss: every 3.5 hours from `2026-09-16T20:00:00Z`.
+
+helltime has no runtime dependency on this site. It opens `https://helltides.com/` only for the optional map action.
 
 ## Trademark / Affiliation Note
 

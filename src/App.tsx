@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
-import { fetchSchedule } from "./lib/helltides";
+import { generateSchedule } from "./lib/helltides";
 import { formatCountdown, formatLocalTime } from "./lib/time";
 import { loadSettings, saveSettings, type BeepPattern, type Settings, type TimerSettings } from "./lib/settings";
 import { playBeep } from "./lib/sound";
 import { formatRemainingSpeech, speak } from "./lib/speech";
-import type { ScheduleResponse, ScheduleType, WorldBossScheduleItem } from "./lib/types";
+import type { ScheduleType, WorldBossScheduleItem } from "./lib/types";
 import { disablePanicStop, isPanicStopEnabled } from "./lib/safety";
 import {
   broadcastOverlayWindowSettings,
@@ -19,7 +19,7 @@ import {
 } from "./lib/overlay_window";
 import { clearOverlayDiag, readOverlayDiag } from "./lib/overlay_diag";
 import { openExternalUrl } from "./lib/external";
-import { findNext } from "./lib/helpers";
+import { findActiveOrNextHelltide, findDueReminderTimers, findNext, toUpcomingTiming } from "./lib/helpers";
 
 type FiredMap = Record<string, number>;
 
@@ -92,7 +92,8 @@ function getWorldBossZoneNames(item: { startTime: string } | null): string[] {
 
 function getWorldBossSubtitle(item: { startTime: string } | null): string | undefined {
   if (!item) return undefined;
-  const boss = typeof (item as WorldBossScheduleItem).boss === "string" ? (item as WorldBossScheduleItem).boss.trim() : "";
+  const rawBoss = (item as WorldBossScheduleItem).boss;
+  const boss = typeof rawBoss === "string" ? rawBoss.trim() : "";
   const zones = getWorldBossZoneNames(item);
   if (boss && zones.length > 0) return `${boss} · ${zones.join(", ")}`;
   if (boss) return boss;
@@ -144,13 +145,8 @@ function sliderToOpacity(slider: number): number {
 const types: ScheduleType[] = ["helltide", "legion", "world_boss"];
 
 export default function App() {
-  const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [lastRefreshAt, setLastRefreshAt] = useState<number | null>(null);
-  const [nextAutoRefreshAt, setNextAutoRefreshAt] = useState<number | null>(null);
-  const autoRefreshTimeoutRef = useRef<number | null>(null);
-  const refreshInFlightRef = useRef(false);
+  const schedule = useMemo(() => generateSchedule(now), [now]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
   const [overlayDebug, setOverlayDebug] = useState<string | null>(null);
@@ -159,6 +155,7 @@ export default function App() {
 
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const firedRef = useRef<FiredMap>(loadFired());
+  const reminderClockRef = useRef<number | null>(null);
   const lastSettingsRef = useRef<Settings>(settings);
 
   function updateSettings(updater: (prev: Settings) => Settings): void {
@@ -174,6 +171,18 @@ export default function App() {
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const syncNow = () => setNow(Date.now());
+    window.addEventListener("focus", syncNow);
+    window.addEventListener("pageshow", syncNow);
+    document.addEventListener("visibilitychange", syncNow);
+    return () => {
+      window.removeEventListener("focus", syncNow);
+      window.removeEventListener("pageshow", syncNow);
+      document.removeEventListener("visibilitychange", syncNow);
+    };
   }, []);
 
   const categoryLayoutKey = useMemo(() => {
@@ -375,68 +384,7 @@ export default function App() {
     saveFired(firedRef.current);
   }, [now]);
 
-  async function refresh() {
-    if (refreshInFlightRef.current) return;
-    refreshInFlightRef.current = true;
-    setError(null);
-    try {
-      const data = await fetchSchedule();
-      data.helltide.sort((a, b) => a.timestamp - b.timestamp);
-      data.legion.sort((a, b) => a.timestamp - b.timestamp);
-      data.world_boss.sort((a, b) => a.timestamp - b.timestamp);
-      setSchedule(data);
-      setLastRefreshAt(Date.now());
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      refreshInFlightRef.current = false;
-    }
-  }
-
-  function randomAutoRefreshMs(): number {
-    const minMs = 10 * 60_000;
-    const maxMs = 15 * 60_000;
-    return Math.floor(minMs + Math.random() * (maxMs - minMs + 1));
-  }
-
-  function scheduleNextAutoRefresh(baseNow: number): void {
-    const nextAt = baseNow + randomAutoRefreshMs();
-    setNextAutoRefreshAt(nextAt);
-    if (autoRefreshTimeoutRef.current) window.clearTimeout(autoRefreshTimeoutRef.current);
-    autoRefreshTimeoutRef.current = window.setTimeout(() => {
-      void refresh();
-    }, Math.max(1000, nextAt - Date.now()));
-  }
-
-  useEffect(() => {
-    void refresh();
-  }, []);
-
-  useEffect(() => {
-    if (panicStopEnabled) {
-      if (autoRefreshTimeoutRef.current) window.clearTimeout(autoRefreshTimeoutRef.current);
-      autoRefreshTimeoutRef.current = null;
-      setNextAutoRefreshAt(null);
-      return;
-    }
-
-    scheduleNextAutoRefresh(Date.now());
-    return () => {
-      if (autoRefreshTimeoutRef.current) window.clearTimeout(autoRefreshTimeoutRef.current);
-      autoRefreshTimeoutRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panicStopEnabled]);
-
-  useEffect(() => {
-    if (panicStopEnabled) return;
-    if (!lastRefreshAt) return;
-    scheduleNextAutoRefresh(lastRefreshAt);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastRefreshAt, panicStopEnabled]);
-
   const nextByType = useMemo(() => {
-    if (!schedule) return null;
     return {
       helltide: findNext(schedule.helltide, now),
       legion: findNext(schedule.legion, now),
@@ -444,45 +392,54 @@ export default function App() {
     };
   }, [schedule, now]);
 
+  const displayByType = useMemo(() => {
+    const nextLegion = findNext(schedule.legion, now);
+    const nextWorldBoss = findNext(schedule.world_boss, now);
+    return {
+      helltide: findActiveOrNextHelltide(schedule.helltide, now),
+      legion: toUpcomingTiming(nextLegion),
+      world_boss: toUpcomingTiming(nextWorldBoss)
+    };
+  }, [schedule, now]);
+
   const orderedTypes = useMemo<ScheduleType[]>(() => {
     const enabled = types.filter((t) => settings.categories[t].enabled);
     const disabled = types.filter((t) => !settings.categories[t].enabled);
-    if (!nextByType) return [...enabled, ...disabled];
+    if (!displayByType) return [...enabled, ...disabled];
 
     const enabledSorted = [...enabled]
       .map((type) => {
-        const next = nextByType[type];
-        const startMs = next ? new Date(next.startTime).getTime() : Number.POSITIVE_INFINITY;
-        return { type, startMs };
+        const timing = displayByType[type];
+        const targetMs = timing ? timing.targetMs : Number.POSITIVE_INFINITY;
+        return { type, targetMs };
       })
-      .sort((a, b) => a.startMs - b.startMs)
+      .sort((a, b) => a.targetMs - b.targetMs)
       .map((x) => x.type);
 
     // Disabled categories are always at the bottom in stable order.
     return [...enabledSorted, ...disabled];
-  }, [nextByType, settings.categories]);
+  }, [displayByType, settings.categories]);
 
   const nextEnabledOverall = useMemo(() => {
-    if (!nextByType) return null;
-    const candidates: Array<{ type: ScheduleType; startMs: number; startTime: string; name: string }> = [];
+    if (!displayByType) return null;
+    const candidates: Array<{ type: ScheduleType; targetMs: number; startTime: string; name: string }> = [];
 
     for (const type of types) {
       if (!settings.categories[type].enabled) continue;
-      const next = nextByType[type];
-      if (!next) continue;
-      const startMs = new Date(next.startTime).getTime();
-      candidates.push({ type, startMs, startTime: next.startTime, name: getEventName(type, next) });
+      const timing = displayByType[type];
+      if (!timing) continue;
+      candidates.push({ type, targetMs: timing.targetMs, startTime: timing.item.startTime, name: getEventName(type, timing.item) });
     }
 
-    candidates.sort((a, b) => a.startMs - b.startMs);
+    candidates.sort((a, b) => a.targetMs - b.targetMs);
     return candidates[0] ?? null;
-  }, [nextByType, settings]);
+  }, [displayByType, settings]);
 
   useEffect(() => {
-    if (!schedule) return;
-    if (panicStopEnabled) return;
+    const previousNow = reminderClockRef.current;
+    reminderClockRef.current = now;
+    if (previousNow === null || panicStopEnabled || now < previousNow) return;
 
-    const fireWindowMs = 30_000;
     const ttsPauseMs = 500;
 
     for (const type of types) {
@@ -494,34 +451,42 @@ export default function App() {
 
       const startMs = new Date(next.startTime).getTime();
       const remainingMs = startMs - now;
-      const title = getEventName(type, next);
-      const spokenTitle = getSpokenEventNameWithTemplate(type, next, category.ttsName);
-      const timeLabel = formatLocalTime(next.startTime);
+      const due = findDueReminderTimers(next, category.timers, category.timerCount, now, previousNow);
+      const fresh = due.due.filter((timer) => !firedRef.current[`${type}:${next.id}:${timer.index}`]);
+      if (fresh.length === 0) continue;
 
-      for (let i = 0; i < category.timerCount; i++) {
-        const timer = category.timers[i];
-        const triggerMs = startMs - timer.minutesBefore * 60_000;
-        if (now < triggerMs || now > triggerMs + fireWindowMs) continue;
-
-        const key = `${type}:${next.id}:${i}`;
-        if (firedRef.current[key]) continue;
-
-        firedRef.current[key] = now;
+      const selected = due.catchUp
+        ? fresh.reduce((best, candidate) => (candidate.triggerMs > best.triggerMs ? candidate : best))
+        : null;
+      if (selected) {
+        for (const timer of fresh) firedRef.current[`${type}:${next.id}:${timer.index}`] = now;
         saveFired(firedRef.current);
+      }
 
+      const announce = (timerIndex: number) => {
+        const timer = category.timers[timerIndex];
+        if (!timer) return;
+        const key = `${type}:${next.id}:${timerIndex}`;
+        if (!firedRef.current[key]) {
+          firedRef.current[key] = now;
+          saveFired(firedRef.current);
+        }
+        const title = getEventName(type, next);
+        const spokenTitle = getSpokenEventNameWithTemplate(type, next, category.ttsName);
         const body = formatCountdown(Math.max(0, remainingMs));
         void showOverlayToast({ title, body, type, kind: "event" });
 
-        if (!settings.soundEnabled) continue;
-
+        if (!settings.soundEnabled) return;
         const beepMs = playBeep(timer.beepPattern, timer.pitchHz, settings.volume);
-
         if (timer.ttsEnabled) {
           window.setTimeout(() => {
             void speak(`${spokenTitle} in ${formatRemainingSpeech(Math.max(0, remainingMs))}`, settings.volume);
           }, beepMs + ttsPauseMs);
         }
-      }
+      };
+
+      if (selected) announce(selected.index);
+      else for (const timer of fresh) announce(timer.index);
     }
   }, [schedule, now, settings, panicStopEnabled]);
 
@@ -601,14 +566,6 @@ export default function App() {
         }
       };
     });
-  }
-
-  function formatClock(ms: number): string {
-    try {
-      return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    } catch {
-      return "—";
-    }
   }
 
   async function showOverlayToast(payload: { title: string; body: string; type?: ScheduleType; kind?: "event" | "debug" }) {
@@ -719,9 +676,7 @@ export default function App() {
                 </svg>
               </button>
             </div>
-            <div className="subNote">
-              Letztes Update: {lastRefreshAt ? formatClock(lastRefreshAt) : "—"}
-            </div>
+            <div className="subNote">Lokale Zeitberechnung</div>
           </div>
         </div>
       </div>
@@ -744,12 +699,6 @@ export default function App() {
               Reset
             </button>
           </div>
-        </div>
-      ) : null}
-
-      {error ? (
-        <div className="errorBanner" style={{ marginTop: 10 }}>
-          Fehler: {error}
         </div>
       ) : null}
 
@@ -1099,10 +1048,12 @@ export default function App() {
       <div className="grid">
         {orderedTypes.map((type) => {
           const category = settings.categories[type];
-          const next = nextByType ? nextByType[type] : null;
-          const nextStartMs = next ? new Date(next.startTime).getTime() : null;
-          const countdown = nextStartMs ? formatCountdown(nextStartMs - now) : "—";
-          const timeLabel = next ? formatLocalTime(next.startTime) : "—";
+          const timing = displayByType ? displayByType[type] : null;
+          const next = timing ? timing.item : null;
+          const countdown = timing ? formatCountdown(timing.targetMs - now) : "—";
+          const timeLabel = timing ? formatLocalTime(new Date(timing.targetMs).toISOString()) : "—";
+          const metaLabel = timing?.active ? "Endet" : "In";
+          const summaryLabel = timing?.active ? "Ende" : "Nächster Start";
           const name = getEventName(type, next);
           const titleParts = getEventTitleParts(type, next);
           const spokenName = getSpokenEventNameWithTemplate(type, next, category.ttsName);
@@ -1131,7 +1082,7 @@ export default function App() {
                     <span className={`categoryTitleSub ${titleParts.subtitle ? "" : "placeholder"}`}>{titleParts.subtitle ?? "—"}</span>
                   </span>
                   <span className="panelHeaderMetaWrap">
-                    <span className="panelHeaderMetaLabel">In</span>
+                    <span className="panelHeaderMetaLabel">{metaLabel}</span>
                     <span className="panelHeaderMeta">{countdown}</span>
                   </span>
                 </button>
@@ -1156,10 +1107,10 @@ export default function App() {
                   <>
                     <div className="categorySummaryRow">
                       <div className="categorySummaryItem">
-                        <span className="categorySummaryLabel">Nächster Start</span>
+                        <span className="categorySummaryLabel">{summaryLabel}</span>
                         <span className="categorySummaryValue">{timeLabel}</span>
                       </div>
-                      {type === "world_boss" && next ? (
+                      {type === "world_boss" && next && getWorldBossZoneNames(next).length > 0 ? (
                         <div className="categorySummaryItem">
                           <span className="categorySummaryLabel">Ort</span>
                           <span className="categorySummaryValue">{getWorldBossLocationLabel(next)}</span>

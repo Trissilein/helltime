@@ -1,15 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use tauri::{Emitter, Listener, Manager, State};
+use tauri::{Emitter, Listener, Manager};
 use tauri::menu::CheckMenuItem;
-use tokio::sync::Mutex;
 use std::sync::Mutex as StdMutex;
-
-const SCHEDULE_URL: &str = "https://helltides.com/api/schedule";
-const CACHE_TTL: Duration = Duration::from_secs(30);
 
 // ============================================================================
 // WINDOW STATE MANAGER - Provides deterministic, serialized window operations
@@ -192,70 +187,6 @@ fn toggle_window(window: &tauri::WebviewWindow, app_handle: &tauri::AppHandle) {
     }
 }
 
-// ============================================================================
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct ScheduleResponse {
-  #[serde(default)]
-  pub world_boss: Vec<serde_json::Value>,
-  #[serde(default)]
-  pub legion: Vec<serde_json::Value>,
-  #[serde(default)]
-  pub helltide: Vec<serde_json::Value>,
-}
-
-#[derive(Default)]
-struct Cache {
-  last_fetch: Option<Instant>,
-  value: Option<ScheduleResponse>,
-}
-
-struct AppState {
-  cache: Mutex<Cache>,
-  http: reqwest::Client,
-}
-
-#[tauri::command]
-async fn fetch_schedule(state: State<'_, AppState>) -> Result<ScheduleResponse, String> {
-  {
-    let cache = state.inner().cache.lock().await;
-    if let (Some(at), Some(value)) = (cache.last_fetch, cache.value.clone()) {
-      if at.elapsed() < CACHE_TTL {
-        return Ok(value);
-      }
-    }
-  }
-
-  let resp = state
-    .inner()
-    .http
-    .get(SCHEDULE_URL)
-    .header(
-      reqwest::header::USER_AGENT,
-      "helltime/0.1 (+https://github.com/)",
-    )
-    .timeout(Duration::from_secs(10))
-    .send()
-    .await
-    .map_err(|e| format!("request failed: {e}"))?;
-
-  if !resp.status().is_success() {
-    return Err(format!("bad status: {}", resp.status()));
-  }
-
-  let json = resp
-    .json::<ScheduleResponse>()
-    .await
-    .map_err(|e| format!("invalid json: {e}"))?;
-
-  let mut cache = state.inner().cache.lock().await;
-  cache.last_fetch = Some(Instant::now());
-  cache.value = Some(json.clone());
-
-  Ok(json)
-}
-
 fn try_load_tray_icon(icon_path: &std::path::Path) -> Option<tauri::image::Image<'static>> {
   use tauri::image::Image;
 
@@ -299,10 +230,6 @@ fn create_fallback_icon() -> tauri::image::Image<'static> {
 
 fn main() {
   tauri::Builder::default()
-    .manage(AppState {
-      cache: Mutex::new(Cache::default()),
-      http: reqwest::Client::new(),
-    })
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_shell::init())
     .setup(|app| {
@@ -448,9 +375,6 @@ fn main() {
         _ => {}
       };
     })
-    .invoke_handler(tauri::generate_handler![
-      fetch_schedule,
-    ])
     .build(tauri::generate_context!())
     .expect("error while building tauri application")
     .run(|_app_handle, _event| {

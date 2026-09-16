@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
-import { fetchSchedule } from "./lib/helltides";
+import { generateSchedule } from "./lib/helltides";
 import { loadSettings } from "./lib/settings";
 import { formatCountdown } from "./lib/time";
-import type { ScheduleResponse, ScheduleType, WorldBossScheduleItem } from "./lib/types";
-import { findNext } from "./lib/helpers";
+import type { ScheduleType, WorldBossScheduleItem } from "./lib/types";
+import { findActiveOrNextHelltide, findNext, toUpcomingTiming } from "./lib/helpers";
 
 function clampFloat(n: unknown, fallback: number, min: number, max: number): number {
   if (typeof n !== "number" || !Number.isFinite(n)) return fallback;
@@ -65,7 +65,8 @@ function getWorldBossZoneNames(item: { startTime: string } | null): string[] {
 function getEventName(type: ScheduleType, item: { startTime: string } | null): { title: string; subtitle?: string } {
   if (!item) return { title: typeLabel(type) };
   if (type === "world_boss") {
-    const boss = typeof (item as WorldBossScheduleItem).boss === "string" ? (item as WorldBossScheduleItem).boss.trim() : "";
+    const rawBoss = (item as WorldBossScheduleItem).boss;
+    const boss = typeof rawBoss === "string" ? rawBoss.trim() : "";
     const zones = getWorldBossZoneNames(item);
     if (boss && zones.length > 0) return { title: "World Boss", subtitle: `${boss} · ${zones.join(", ")}` };
     if (boss) return { title: "World Boss", subtitle: boss };
@@ -91,9 +92,8 @@ export default function OverlayWindow() {
   const scaleXRef = useRef(1);
   const scaleYRef = useRef(1);
   const positioningRef = useRef(false);
-  const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const schedule = useMemo(() => generateSchedule(now), [now]);
   const [settings, setSettings] = useState(() => loadSettings());
   const [toast, setToast] = useState<{ payload: ToastPayload; shownAt: number } | null>(null);
 
@@ -108,6 +108,18 @@ export default function OverlayWindow() {
   }, []);
 
   useEffect(() => {
+    const syncNow = () => setNow(Date.now());
+    window.addEventListener("focus", syncNow);
+    window.addEventListener("pageshow", syncNow);
+    document.addEventListener("visibilitychange", syncNow);
+    return () => {
+      window.removeEventListener("focus", syncNow);
+      window.removeEventListener("pageshow", syncNow);
+      document.removeEventListener("visibilitychange", syncNow);
+    };
+  }, []);
+
+  useEffect(() => {
     setSettings(loadSettings());
   }, []);
 
@@ -118,25 +130,6 @@ export default function OverlayWindow() {
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  useEffect(() => {
-    async function refresh() {
-      try {
-        const data = await fetchSchedule();
-        data.helltide.sort((a, b) => a.timestamp - b.timestamp);
-        data.legion.sort((a, b) => a.timestamp - b.timestamp);
-        data.world_boss.sort((a, b) => a.timestamp - b.timestamp);
-        setSchedule(data);
-        setError(null);
-      } catch (e) {
-        setError(String(e));
-      }
-    }
-
-    void refresh();
-    const id = window.setInterval(() => void refresh(), 60_000);
-    return () => window.clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -191,11 +184,12 @@ export default function OverlayWindow() {
   }, []);
 
   const nextByType = useMemo(() => {
-    if (!schedule) return null;
+    const nextLegion = findNext(schedule.legion, now);
+    const nextWorldBoss = findNext(schedule.world_boss, now);
     return {
-      helltide: findNext(schedule.helltide, now),
-      legion: findNext(schedule.legion, now),
-      world_boss: findNext(schedule.world_boss, now)
+      helltide: findActiveOrNextHelltide(schedule.helltide, now),
+      legion: toUpcomingTiming(nextLegion),
+      world_boss: toUpcomingTiming(nextWorldBoss)
     };
   }, [schedule, now]);
 
@@ -209,11 +203,11 @@ export default function OverlayWindow() {
     if (!nextByType) return [...enabledTypes];
     return [...enabledTypes]
       .map((type) => {
-        const next = nextByType[type];
-        const startMs = next ? new Date(next.startTime).getTime() : Number.POSITIVE_INFINITY;
-        return { type, startMs };
+        const timing = nextByType[type];
+        const targetMs = timing ? timing.targetMs : Number.POSITIVE_INFINITY;
+        return { type, targetMs };
       })
-      .sort((a, b) => a.startMs - b.startMs)
+      .sort((a, b) => a.targetMs - b.targetMs)
       .map((x) => x.type);
   }, [enabledTypes, nextByType]);
 
@@ -385,8 +379,6 @@ export default function OverlayWindow() {
           </div>
         ) : null}
 
-        {error ? <div className="overlayError">Fehler</div> : null}
-
         {mode === "toast" ? (
           toast && toastVisible ? (
             <div className={`overlayToast ${toast.payload.type ?? ""}`} data-tauri-drag-region>
@@ -406,17 +398,19 @@ export default function OverlayWindow() {
         ) : (
           <div className="overlayLines" data-tauri-drag-region>
             {ordered.map((type) => {
-              const next = nextByType ? nextByType[type] : null;
-              const startMs = next ? new Date(next.startTime).getTime() : null;
-              const remaining = startMs ? formatCountdown(startMs - now) : "—";
+              const timing = nextByType ? nextByType[type] : null;
+              const next = timing ? timing.item : null;
+              const remaining = timing ? formatCountdown(timing.targetMs - now) : "—";
               const name = getEventName(type, next);
+              const displayName =
+                type === "helltide" && timing?.active ? { ...name, title: "Helltide endet" } : name;
               const showSubline = type === "world_boss" && Boolean(name.subtitle);
 
               return (
                 <div className={`overlayLine ${type}`} key={type} data-tauri-drag-region>
                   <span className="overlayLineEvent">
-                    <span className="overlayLineEventTitle">{name.title}</span>
-                    {showSubline ? <span className="overlayLineEventSub">{name.subtitle}</span> : null}
+                    <span className="overlayLineEventTitle">{displayName.title}</span>
+                    {showSubline ? <span className="overlayLineEventSub">{displayName.subtitle}</span> : null}
                   </span>
                   <span className="overlayLineTime">{remaining}</span>
                 </div>

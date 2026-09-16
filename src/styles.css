@@ -158,19 +158,6 @@ input {
   padding: var(--space-4); /* 8px - was 12px */
 }
 
-.errorBanner {
-  border: 1px solid var(--border);
-  border-left: 2px solid rgba(239, 68, 68, 0.6);
-  border-radius: var(--radius-lg); /* 8px - was 14px */
-  background: linear-gradient(135deg, rgba(12, 5, 5, 0.5) 0%, rgba(0, 0, 0, 0.4) 100%);
-  padding: var(--space-3) var(--space-4); /* 6px 8px - was 10px 12px */
-  color: var(--text-primary);
-  font-size: var(--text-sm); /* 11px - was 12px */
-  box-shadow:
-    var(--shadow-sm),
-    inset 2px 0 6px rgba(239, 68, 68, 0.15);
-}
-
 .modalBackdrop {
   position: fixed;
   inset: 0;
@@ -1484,12 +1471,6 @@ input[type="color"]:focus-visible {
   border: 0;
   background: transparent;
   padding: 0;
-}
-
-.overlayError {
-  font-size: 13px;
-  opacity: 0.85;
-  padding: 6px 0;
 }
 
 .overlayToastLine {
