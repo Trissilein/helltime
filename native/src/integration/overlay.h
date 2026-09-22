@@ -37,6 +37,8 @@ private:
     POINT position_{40, 40};
     POINT dragOffset_{};
     bool dragging_{false};
+    bool positioning_{false};
+    ULONGLONG positioningUntil_{0};
     std::wstring reminderTitle_{};
     std::wstring reminderBody_{};
     ULONGLONG reminderUntil_{0};

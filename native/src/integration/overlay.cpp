@@ -54,7 +54,7 @@ bool OverlayWindow::Create(HINSTANCE instance) {
         kClassName, L"Helltime overlay", WS_POPUP,
         position_.x, position_.y, width_, height_, nullptr, nullptr, instance, this);
     if (!window_) return false;
-    SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE | SWP_HIDEWINDOW);
     return true;
 }
 
@@ -83,13 +83,12 @@ void OverlayWindow::SetClickThrough(bool enabled) {
 
 void OverlayWindow::BeginMove() {
     if (!window_) return;
-    dragging_ = true;
+    positioning_ = true;
+    positioningUntil_ = GetTickCount64() + 15'000;
     SetClickThrough(false);
     SetForegroundWindow(window_);
-    POINT cursor{};
-    GetCursorPos(&cursor);
-    dragOffset_ = {cursor.x - position_.x, cursor.y - position_.y};
-    SetCapture(window_);
+    SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_,
+                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
 }
 
 void OverlayWindow::ClampPosition() {
@@ -127,18 +126,34 @@ void OverlayWindow::SavePosition() const {
 void OverlayWindow::Update(const ui::UiState& state, const domain::Settings& settings,
                            const domain::Schedule& schedule, std::int64_t nowMs) {
     if (!window_) return;
+    if (positioning_ && GetTickCount64() >= positioningUntil_) {
+        positioning_ = false;
+        SetClickThrough(true);
+    }
     if (state.panicStop || !state.overlayEnabled || !settings.overlayWindowEnabled) {
         Hide();
         return;
     }
-    const bool toast = state.overlayMode == ui::OverlayMode::Toast;
+    const bool reminderActive = reminderUntil_ > GetTickCount64();
+    const bool toast = state.overlayMode == ui::OverlayMode::Toast || reminderActive;
+    const bool hasOverviewRows = std::any_of(state.overlayCategories.begin(), state.overlayCategories.end(),
+        [&state, index = std::size_t{0}](bool enabled) mutable {
+            const bool visible = enabled && state.categories[index].enabled;
+            ++index;
+            return visible;
+        });
+    if ((toast && !reminderActive && !positioning_) || (!toast && !hasOverviewRows)) {
+        Hide();
+        return;
+    }
     width_ = static_cast<int>(std::lround((toast ? 360.0f : 390.0f) * state.overlayScaleX));
     height_ = static_cast<int>(std::lround((toast ? 84.0f : 150.0f) * state.overlayScaleY));
     width_ = std::clamp(width_, 200, 900);
     height_ = std::clamp(height_, 52, 360);
     ClampPosition();
-    SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE);
     Render(state, settings, schedule, nowMs);
+    ShowWindow(window_, SW_SHOWNOACTIVATE);
 }
 
 void OverlayWindow::Render(const ui::UiState& state, const domain::Settings& settings,
@@ -189,8 +204,9 @@ void OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
         target->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1, 0.62f), &muted);
         target->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), 8, 8), background);
 
-        const bool reminderToast = state.overlayMode == ui::OverlayMode::Toast && reminderUntil_ > GetTickCount64();
-        const int count = state.overlayMode == ui::OverlayMode::Toast ? 1 : 3;
+        const bool reminderToast = reminderUntil_ > GetTickCount64();
+        const bool toast = state.overlayMode == ui::OverlayMode::Toast || reminderToast;
+        const int count = toast ? 1 : 3;
         const float gap = 5.0f;
         const float row = (height_ - 8.0f - gap * (count - 1)) / count;
         int drawn = 0;
@@ -201,7 +217,11 @@ void OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
             target->DrawTextW(reminderBody_.c_str(), static_cast<UINT32>(reminderBody_.size()), body,
                               D2D1::RectF(13, height_ * 0.52f, width_ - 13.0f, height_ - 11.0f), muted);
         }
-        for (int i = 0; !reminderToast && i < 3 && drawn < count; ++i) {
+        if (positioning_) {
+            target->DrawTextW(L"Overlay ziehen", 13, body,
+                              D2D1::RectF(13, 7, width_ - 13.0f, 25), muted);
+        }
+        for (int i = 0; !toast && i < 3 && drawn < count; ++i) {
             if (!state.overlayCategories[static_cast<std::size_t>(i)] || !state.categories[static_cast<std::size_t>(i)].enabled) continue;
             const auto& category = state.categories[static_cast<std::size_t>(i)];
             const float y = 4.0f + drawn * (row + gap);
@@ -218,7 +238,9 @@ void OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
         POINT topLeft{position_.x, position_.y};
         SIZE size{width_, height_};
         BLENDFUNCTION blend{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
-        UpdateLayeredWindow(window_, nullptr, &topLeft, &size, dc, nullptr, 0, &blend, ULW_ALPHA);
+        if (!UpdateLayeredWindow(window_, nullptr, &topLeft, &size, dc, nullptr, 0, &blend, ULW_ALPHA)) {
+            OutputDebugStringW(L"Helltime overlay: UpdateLayeredWindow failed\n");
+        }
     }
 
     if (oldBitmap && dc) SelectObject(dc, oldBitmap);
@@ -242,7 +264,12 @@ LRESULT OverlayWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
     switch (message) {
     case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
     case WM_LBUTTONDOWN:
-        if (dragging_) { SetCapture(window_); return 0; }
+        if (positioning_) {
+            dragging_ = true;
+            POINT cursor{}; GetCursorPos(&cursor);
+            dragOffset_ = {cursor.x - position_.x, cursor.y - position_.y};
+            SetCapture(window_);
+        }
         return 0;
     case WM_MOUSEMOVE:
         if (dragging_ && (wParam & MK_LBUTTON)) {
@@ -255,6 +282,8 @@ LRESULT OverlayWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
     case WM_LBUTTONUP:
         if (dragging_) {
             dragging_ = false;
+            positioning_ = false;
+            positioningUntil_ = 0;
             if (GetCapture() == window_) ReleaseCapture();
             SavePosition();
             SetClickThrough(true);

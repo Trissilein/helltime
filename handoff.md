@@ -4,6 +4,20 @@ Stand: 2026-09-22
 Repository: `D:\GIT\helltime`  
 Basis vor diesem Handoff: `13b490c feat: add native Win32 Helltime client`
 
+## Fortschritt nach Handoff
+
+- `c978691`: UTF-8-Quellen, dunkle Windows-Titelleiste und Per-Monitor-DPI.
+- `7adeb9e`: Tray-Checkboxen für Overlay und Erinnerungen wiederhergestellt.
+- Overlay-Lifecycle: Toast bleibt ohne Reminder verborgen; Reminder kann Overview
+  temporär ersetzen; leere Overview versteckt sich; Tray-Positionieren wartet auf
+  echten Mausklick und läuft nach 15 s wieder click-through aus.
+- Letzter Build nach Overlay-Fix: CTest 1/1 bestanden, Native 448.512 B,
+  SHA-256 `E150428E1D0C94F1AEC782CB7D267E16060C2FC5E8604C09D141438C11E89391`.
+  Tauri-Hash blieb unverändert.
+
+Diese Änderungen sind noch keine visuelle Abnahme. Die verbleibenden Abschnitte
+dieser Übergabe gelten weiter.
+
 ## Entscheidung
 
 Der Native-Win32-Build ist **nicht abnahmefähig**. Er ist ein technisches Gerüst, kein
