@@ -19,6 +19,13 @@ constexpr wchar_t kClassName[] = L"HelltimeNativeOverlay";
 
 template <typename T> void release(T*& value) { if (value) { value->Release(); value = nullptr; } }
 
+void logOverlayFailure(const wchar_t* step, HRESULT result = S_OK) {
+    wchar_t message[160]{};
+    if (FAILED(result)) swprintf_s(message, L"Helltime overlay: %s failed (HRESULT 0x%08X)\n", step, static_cast<unsigned>(result));
+    else swprintf_s(message, L"Helltime overlay: %s failed (Win32 %lu)\n", step, GetLastError());
+    OutputDebugStringW(message);
+}
+
 std::wstring appDataFile() {
     wchar_t buffer[32768]{};
     const auto size = GetEnvironmentVariableW(L"LOCALAPPDATA", buffer, static_cast<DWORD>(std::size(buffer)));
@@ -182,15 +189,26 @@ void OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
         D2D1_RENDER_TARGET_TYPE_DEFAULT,
         D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
         0, 0, D2D1_RENDER_TARGET_USAGE_NONE, D2D1_FEATURE_LEVEL_DEFAULT};
-    bool ready = SUCCEEDED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2d)) &&
-        SUCCEEDED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&write))) &&
-        SUCCEEDED(d2d->CreateDCRenderTarget(&properties, &target));
+    HRESULT result = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2d);
+    if (FAILED(result)) logOverlayFailure(L"D2D factory", result);
+    if (SUCCEEDED(result)) {
+        result = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&write));
+        if (FAILED(result)) logOverlayFailure(L"DirectWrite factory", result);
+    }
+    if (SUCCEEDED(result)) {
+        result = d2d->CreateDCRenderTarget(&properties, &target);
+        if (FAILED(result)) logOverlayFailure(L"D2D DC target", result);
+    }
+    const bool ready = SUCCEEDED(result);
     if (ready) {
-        write->CreateTextFormat(L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL,
-                                DWRITE_FONT_STRETCH_NORMAL, 16.0f, L"", &title);
-        write->CreateTextFormat(L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
-                                DWRITE_FONT_STRETCH_NORMAL, 12.0f, L"", &body);
+        result = write->CreateTextFormat(L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL,
+                                         DWRITE_FONT_STRETCH_NORMAL, 16.0f, L"", &title);
+        if (SUCCEEDED(result)) result = write->CreateTextFormat(L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+                                                                 DWRITE_FONT_STRETCH_NORMAL, 12.0f, L"", &body);
+        if (FAILED(result)) logOverlayFailure(L"text format", result);
+        if (FAILED(result)) goto cleanup;
         dc = CreateCompatibleDC(nullptr);
+        if (!dc) logOverlayFailure(L"compatible DC");
         BITMAPINFO info{};
         info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
         info.bmiHeader.biWidth = width_;
@@ -198,10 +216,15 @@ void OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
         info.bmiHeader.biPlanes = 1;
         info.bmiHeader.biBitCount = 32;
         info.bmiHeader.biCompression = BI_RGB;
-        bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, nullptr, nullptr, 0);
-        oldBitmap = static_cast<HBITMAP>(SelectObject(dc, bitmap));
+        if (dc) bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, nullptr, nullptr, 0);
+        if (!bitmap) logOverlayFailure(L"DIB section");
+        if (bitmap) oldBitmap = static_cast<HBITMAP>(SelectObject(dc, bitmap));
+        if (!oldBitmap || oldBitmap == HGDI_ERROR) logOverlayFailure(L"DIB selection");
         RECT rect{0, 0, width_, height_};
-        target->BindDC(dc, &rect);
+        if (oldBitmap && oldBitmap != HGDI_ERROR) result = target->BindDC(dc, &rect);
+        else result = E_FAIL;
+        if (FAILED(result)) logOverlayFailure(L"D2D BindDC", result);
+        if (FAILED(result)) goto cleanup;
         target->BeginDraw();
         target->Clear(D2D1::ColorF(0, 0));
         const auto bg = colorFromHex(settings.overlayBgHex);
@@ -241,15 +264,20 @@ void OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
                               D2D1::RectF(13, y + row - 23, width_ - 13.0f, y + row - 5), muted);
             ++drawn;
         }
-        target->EndDraw();
+        result = target->EndDraw();
+        if (FAILED(result)) {
+            logOverlayFailure(L"D2D EndDraw", result);
+            goto cleanup;
+        }
         POINT topLeft{position_.x, position_.y};
         SIZE size{width_, height_};
         BLENDFUNCTION blend{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
         if (!UpdateLayeredWindow(window_, nullptr, &topLeft, &size, dc, nullptr, 0, &blend, ULW_ALPHA)) {
-            OutputDebugStringW(L"Helltime overlay: UpdateLayeredWindow failed\n");
+            logOverlayFailure(L"UpdateLayeredWindow");
         }
     }
 
+cleanup:
     if (oldBitmap && dc) SelectObject(dc, oldBitmap);
     if (bitmap) DeleteObject(bitmap);
     if (dc) DeleteDC(dc);
