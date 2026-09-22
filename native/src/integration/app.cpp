@@ -233,6 +233,18 @@ void NativeApp::ApplyAction(const ui::UiAction& action) {
     case ui::ActionKind::SetOverlayScaleX: settings_.overlayScaleX = action.value; break;
     case ui::ActionKind::SetOverlayScaleY: settings_.overlayScaleY = action.value; break;
     case ui::ActionKind::SetOverlayOpacity: settings_.overlayBgOpacity = action.value; break;
+    case ui::ActionKind::PreviewOverlay:
+        overlay_.ShowReminderToast(L"Helltime Vorschau", L"Nächster Timer: 00:30");
+        Refresh(true);
+        return;
+    case ui::ActionKind::BeginOverlayMove:
+        overlay_.BeginMove();
+        Refresh(true);
+        return;
+    case ui::ActionKind::ResetOverlayPosition:
+        overlay_.ResetPosition();
+        Refresh(true);
+        return;
     case ui::ActionKind::SetVolume: settings_.volume = action.value; break;
     case ui::ActionKind::SetSoundEnabled: settings_.soundEnabled = action.enabled; break;
     case ui::ActionKind::SetAutoRefreshEnabled: settings_.autoRefreshEnabled = action.enabled; break;

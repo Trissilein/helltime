@@ -85,6 +85,9 @@ struct MainWindowUi::Impl {
         OverlayScaleX,
         OverlayScaleY,
         OverlayOpacity,
+        PreviewOverlay,
+        BeginOverlayMove,
+        ResetOverlayPosition,
         Volume,
         SoundEnabled,
         AutoRefreshEnabled,
@@ -450,7 +453,7 @@ struct MainWindowUi::Impl {
         const float controlLeft = left + pad;
         const float right = modal.right - pad;
 
-        const D2D1_RECT_F behavior = D2D1::RectF(controlLeft, y, right, y + 106.0f);
+        const D2D1_RECT_F behavior = D2D1::RectF(controlLeft, y, right, y + 140.0f);
         DrawModalSection(behavior);
         Text(L"Overlay Verhalten", headingFormat, textBrush, D2D1::RectF(behavior.left + 12.0f, y + 7.0f, right - 12.0f, y + 27.0f));
         Text(L"Aktiv", smallFormat, mutedBrush, D2D1::RectF(behavior.left + 12.0f, y + 32.0f, behavior.left + 58.0f, y + 52.0f));
@@ -473,7 +476,16 @@ struct MainWindowUi::Impl {
             AddHit(D2D1::RectF(x - 3.0f, y + 64.0f, x + 95.0f, y + 92.0f), HitKind::OverlayCategory, CategoryAt(i));
             x += i == 0 ? 99.0f : 106.0f;
         }
-        y += 114.0f;
+        const D2D1_RECT_F preview = D2D1::RectF(behavior.left + 12.0f, y + 102.0f, behavior.left + 86.0f, y + 128.0f);
+        const D2D1_RECT_F position = D2D1::RectF(behavior.left + 92.0f, y + 102.0f, behavior.left + 184.0f, y + 128.0f);
+        const D2D1_RECT_F resetPosition = D2D1::RectF(behavior.left + 190.0f, y + 102.0f, behavior.left + 294.0f, y + 128.0f);
+        DrawButton(preview, L"Vorschau", true);
+        DrawButton(position, L"Position", true);
+        DrawButton(resetPosition, L"Reset Position");
+        AddHit(preview, HitKind::PreviewOverlay);
+        AddHit(position, HitKind::BeginOverlayMove);
+        AddHit(resetPosition, HitKind::ResetOverlayPosition);
+        y += 148.0f;
 
         const D2D1_RECT_F look = D2D1::RectF(controlLeft, y, right, y + 150.0f);
         DrawModalSection(look);
@@ -688,6 +700,18 @@ struct MainWindowUi::Impl {
             Emit(action);
             break;
         }
+        case HitKind::PreviewOverlay:
+            action.kind = ActionKind::PreviewOverlay;
+            Emit(action);
+            break;
+        case HitKind::BeginOverlayMove:
+            action.kind = ActionKind::BeginOverlayMove;
+            Emit(action);
+            break;
+        case HitKind::ResetOverlayPosition:
+            action.kind = ActionKind::ResetOverlayPosition;
+            Emit(action);
+            break;
         case HitKind::SoundEnabled:
             state.soundEnabled = !state.soundEnabled;
             action.kind = ActionKind::SetSoundEnabled;

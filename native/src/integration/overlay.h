@@ -20,6 +20,7 @@ public:
                 const domain::Schedule& schedule, std::int64_t nowMs);
     void ShowReminderToast(const std::wstring& title, const std::wstring& body);
     void BeginMove();
+    void ResetPosition();
     void Hide();
     void Destroy();
 

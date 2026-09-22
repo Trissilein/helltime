@@ -91,6 +91,13 @@ void OverlayWindow::BeginMove() {
                  SWP_NOACTIVATE | SWP_SHOWWINDOW);
 }
 
+void OverlayWindow::ResetPosition() {
+    position_ = {40, 40};
+    ClampPosition();
+    SavePosition();
+    if (window_) SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE | SWP_NOSIZE);
+}
+
 void OverlayWindow::ClampPosition() {
     const int left = GetSystemMetrics(SM_XVIRTUALSCREEN);
     const int top = GetSystemMetrics(SM_YVIRTUALSCREEN);
