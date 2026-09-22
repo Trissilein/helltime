@@ -31,6 +31,18 @@ höchstens etwa 15–20 % vertretbar.
 
 ## Artefakte und Git-Stand
 
+### Fortschritt 2026-09-22 (noch ohne visuelle Abnahme)
+
+- Hauptansicht folgt nun dem Referenzaufbau: maximal 600 px breite, zentrierte,
+  vertikal gestapelte Event-Karten statt drei Spalten.
+- Eine geöffnete Karte schließt die anderen Karten; Footer wird unter dem
+  tatsächlichen Kartenende angeordnet und kann Timer nicht mehr überdecken.
+- Technische TTS-Untertitel wurden aus den Karten entfernt; Header nutzt das
+  Zahnrad-Symbol wie Referenz. VS18-Release-Build, CTest 1/1 und 2-s-Prozessstart
+  wurden nach dieser Änderung erneut bestanden.
+- Offene Abnahme bleibt: echter Screenshot-/Overlay-/Audio-/DPI-Test. Ein
+  Prozess-Smoke-Test ist kein visueller Beleg.
+
 - Original: `dist\helltime.exe` (Tauri)
 - Native: `dist\helltime-native.exe` (Win32, C++20/Direct2D/DirectWrite)
 - Native-Artefakt beim letzten technischen Check: 446.976 B

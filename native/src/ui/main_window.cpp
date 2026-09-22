@@ -312,10 +312,7 @@ struct MainWindowUi::Impl {
         Text(title, headingFormat,
              categoryView.enabled ? textBrush : mutedBrush,
              D2D1::RectF(header.left, header.top, header.right - 94.0f, header.top + 22.0f));
-        if (!categoryView.subtitle.empty()) {
-            Text(categoryView.subtitle, smallFormat, mutedBrush,
-                 D2D1::RectF(header.left, header.top + 21.0f, header.right - 94.0f, header.bottom));
-        }
+        // TTS names are configuration, not card content. The Tauri view keeps cards event-focused too.
 
         Text(categoryView.countdown.empty() ? L"—" : categoryView.countdown, countdownFormat,
              categoryView.enabled ? goldBrush : mutedBrush,
@@ -384,32 +381,32 @@ struct MainWindowUi::Impl {
         hits.clear();
         const float margin = 8.0f;
         const float gap = 6.0f;
-        const bool columns = width >= 760.0f;
-        const float contentWidth = std::max(200.0f, width - margin * 2.0f);
+        const float contentWidth = std::min(600.0f, std::max(200.0f, width - margin * 2.0f));
+        const float contentLeft = (width - contentWidth) * 0.5f;
         const float headerBottom = 62.0f;
-        const float cardWidth = columns ? (contentWidth - gap * 2.0f) / 3.0f : contentWidth;
-        const float cardBaseHeight = columns ? 108.0f : 98.0f;
+        const float cardWidth = contentWidth;
+        const float cardBaseHeight = 98.0f;
         float y = headerBottom;
         for (int i = 0; i < 3; ++i) {
             const auto& category = state.categories[static_cast<std::size_t>(i)];
-            const float cardHeight = category.expanded ? (columns ? 280.0f : 278.0f) : cardBaseHeight;
-            const float x = columns ? margin + static_cast<float>(i) * (cardWidth + gap) : margin;
-            const float top = columns ? headerBottom : y;
-            DrawCategoryCard(CategoryAt(i), category, D2D1::RectF(x, top, x + cardWidth, top + cardHeight), !columns);
-            if (!columns) y += cardHeight + gap;
+            const float cardHeight = category.expanded ? 278.0f : cardBaseHeight;
+            DrawCategoryCard(CategoryAt(i), category,
+                             D2D1::RectF(contentLeft, y, contentLeft + cardWidth, y + cardHeight), true);
+            y += cardHeight + gap;
         }
-        const float footerTop = columns ? headerBottom + 116.0f : y + 2.0f;
+        const float footerTop = y + 2.0f;
         const float footerBottom = std::min(height - 8.0f, footerTop + 36.0f);
         if (footerBottom > footerTop) {
-            FillRounded(D2D1::RectF(margin, footerTop, width - margin, footerBottom), 7.0f,
+            FillRounded(D2D1::RectF(contentLeft, footerTop, contentLeft + contentWidth, footerBottom), 7.0f,
                         D2D1::ColorF(0.08f, 0.08f, 0.08f, 0.94f));
-            StrokeRounded(D2D1::RectF(margin, footerTop, width - margin, footerBottom), 7.0f, kBorder);
+            StrokeRounded(D2D1::RectF(contentLeft, footerTop, contentLeft + contentWidth, footerBottom), 7.0f, kBorder);
             Text(L"Overlay", smallFormat, mutedBrush,
-                 D2D1::RectF(margin + 12.0f, footerTop, margin + 62.0f, footerBottom));
-            const D2D1_RECT_F overlayToggle = D2D1::RectF(margin + 68.0f, footerTop + 11.0f, margin + 94.0f, footerTop + 25.0f);
+                 D2D1::RectF(contentLeft + 12.0f, footerTop, contentLeft + 62.0f, footerBottom));
+            const D2D1_RECT_F overlayToggle = D2D1::RectF(contentLeft + 68.0f, footerTop + 11.0f, contentLeft + 94.0f, footerTop + 25.0f);
             DrawToggle(overlayToggle, state.overlayEnabled);
-            AddHit(D2D1::RectF(margin + 62.0f, footerTop + 4.0f, margin + 101.0f, footerBottom - 4.0f), HitKind::OverlayEnabled);
-            const D2D1_RECT_F settings = D2D1::RectF(width - margin - 90.0f, footerTop + 5.0f, width - margin - 10.0f, footerBottom - 5.0f);
+            AddHit(D2D1::RectF(contentLeft + 62.0f, footerTop + 4.0f, contentLeft + 101.0f, footerBottom - 4.0f), HitKind::OverlayEnabled);
+            const D2D1_RECT_F settings = D2D1::RectF(contentLeft + contentWidth - 90.0f, footerTop + 5.0f,
+                                                     contentLeft + contentWidth - 10.0f, footerBottom - 5.0f);
             DrawButton(settings, L"Einstellungen", true);
             AddHit(settings, HitKind::Settings);
         }
@@ -423,7 +420,7 @@ struct MainWindowUi::Impl {
         Text(L"time", titleFormat, redBrush, D2D1::RectF(51.0f, 8.0f, 94.0f, 34.0f));
         Text(L"Event Timers", smallFormat, mutedBrush, D2D1::RectF(15.0f, 35.0f, 130.0f, 54.0f));
         const D2D1_RECT_F settings = D2D1::RectF(width - 60.0f, 10.0f, width - 14.0f, 42.0f);
-        DrawButton(settings, L"SET");
+        DrawButton(settings, L"\u2699");
         AddHit(settings, HitKind::Settings);
     }
 
@@ -628,6 +625,11 @@ struct MainWindowUi::Impl {
         case HitKind::CardHeader: {
             auto& category = state.categories[static_cast<std::size_t>(IndexOf(hit.category))];
             category.expanded = !category.expanded;
+            if (category.expanded) {
+                for (int index = 0; index < 3; ++index) {
+                    if (index != IndexOf(hit.category)) state.categories[static_cast<std::size_t>(index)].expanded = false;
+                }
+            }
             action.kind = ActionKind::SetCategoryExpanded;
             action.enabled = category.expanded;
             Emit(action);
