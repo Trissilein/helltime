@@ -9,38 +9,40 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
-#include <string>
 #include <iterator>
+#include <string>
+#include <utility>
 
 namespace helltime::integration {
 namespace {
 
 constexpr wchar_t kClassName[] = L"HelltimeNativeOverlay";
 
-template <typename T> void release(T*& value) { if (value) { value->Release(); value = nullptr; } }
-
-void logOverlayFailure(const wchar_t* step, HRESULT result = S_OK) {
-    wchar_t message[160]{};
-    if (FAILED(result)) swprintf_s(message, L"Helltime overlay: %s failed (HRESULT 0x%08X)\n", step, static_cast<unsigned>(result));
-    else swprintf_s(message, L"Helltime overlay: %s failed (Win32 %lu)\n", step, GetLastError());
-    OutputDebugStringW(message);
+template <typename T> void release(T*& value) {
+    if (value) {
+        value->Release();
+        value = nullptr;
+    }
 }
 
 std::wstring appDataFile() {
     wchar_t buffer[32768]{};
     const auto size = GetEnvironmentVariableW(L"LOCALAPPDATA", buffer, static_cast<DWORD>(std::size(buffer)));
-    return size == 0 || size >= std::size(buffer) ? std::wstring{} : std::wstring(buffer, size) + L"\\HelltimeNative\\overlay-position.txt";
+    return size == 0 || size >= std::size(buffer)
+        ? std::wstring{}
+        : std::wstring(buffer, size) + L"\\HelltimeNative\\overlay-position.txt";
 }
 
 std::array<float, 4> colorFromHex(const std::string& hex) {
     unsigned int value = 0;
-    if (hex.size() == 7 && std::sscanf(hex.c_str() + 1, "%06x", &value) == 1) {
-        return {((value >> 16) & 255) / 255.0f, ((value >> 8) & 255) / 255.0f, (value & 255) / 255.0f, 1.0f};
+    if (hex.size() == 7 && sscanf_s(hex.c_str() + 1, "%06x", &value) == 1) {
+        return {((value >> 16) & 255) / 255.0f,
+                ((value >> 8) & 255) / 255.0f,
+                (value & 255) / 255.0f,
+                1.0f};
     }
     return {0.043f, 0.071f, 0.125f, 1.0f};
 }
-
-std::wstring toWide(const std::wstring& value) { return value; }
 
 } // namespace
 
@@ -48,61 +50,125 @@ OverlayWindow::~OverlayWindow() { Destroy(); }
 
 bool OverlayWindow::Create(HINSTANCE instance) {
     instance_ = instance;
+    diagnostics_ = {};
+    diagnostics_.hwnd = nullptr;
+
     WNDCLASSEXW klass{sizeof(klass)};
     klass.hInstance = instance;
     klass.lpfnWndProc = WindowProc;
     klass.lpszClassName = kClassName;
     klass.hCursor = LoadCursorW(nullptr, IDC_SIZEALL);
     klass.hbrBackground = nullptr;
-    RegisterClassExW(&klass);
+    SetLastError(ERROR_SUCCESS);
+    if (!RegisterClassExW(&klass) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
+        RecordError(L"RegisterClassExW");
+        return false;
+    }
+
     LoadPosition();
     window_ = CreateWindowExW(
         WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
         kClassName, L"Helltime overlay", WS_POPUP,
         position_.x, position_.y, width_, height_, nullptr, nullptr, instance, this);
-    if (!window_) return false;
-    SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE | SWP_HIDEWINDOW);
+    if (!window_) {
+        RecordError(L"CreateWindowExW");
+        return false;
+    }
+
+    diagnostics_.created = true;
+    diagnostics_.hwnd = window_;
+    if (!SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_,
+                      SWP_NOACTIVATE | SWP_HIDEWINDOW)) {
+        RecordError(L"SetWindowPos(create)");
+        DestroyWindow(window_);
+        window_ = nullptr;
+        diagnostics_.created = false;
+        return false;
+    }
+    RefreshDiagnosticsBounds();
+    RecordEvent(L"created");
     return true;
 }
 
 void OverlayWindow::Destroy() {
-    if (window_) DestroyWindow(window_);
-    window_ = nullptr;
+    if (window_) {
+        if (!DestroyWindow(window_)) RecordError(L"DestroyWindow");
+        window_ = nullptr;
+    }
+    diagnostics_.visible = false;
+    diagnostics_.showSucceeded = false;
+    diagnostics_.hwnd = nullptr;
     if (instance_) UnregisterClassW(kClassName, instance_);
 }
 
-void OverlayWindow::Hide() { if (window_) ShowWindow(window_, SW_HIDE); }
+void OverlayWindow::Hide() {
+    if (!window_) return;
+    ShowWindow(window_, SW_HIDE);
+    diagnostics_.showSucceeded = false;
+    diagnostics_.visible = false;
+    RefreshDiagnosticsBounds();
+}
 
-void OverlayWindow::ShowReminderToast(const std::wstring& title, const std::wstring& body) {
+void OverlayWindow::ShowToast(const std::wstring& title, const std::wstring& body,
+                              const std::wstring& category, ULONGLONG durationMs) {
     reminderTitle_ = title;
     reminderBody_ = body;
-    reminderUntil_ = GetTickCount64() + 5200;
+    reminderCategory_ = category;
+    reminderUntil_ = GetTickCount64() + std::max<ULONGLONG>(1, durationMs);
+    RecordEvent(L"toast queued");
+}
+
+void OverlayWindow::ShowReminderToast(const std::wstring& title, const std::wstring& body) {
+    ShowToast(title, body, {}, 5200);
+}
+
+void OverlayWindow::ShowPreviewToast(const std::wstring& title, const std::wstring& body) {
+    ShowToast(title, body, {}, 8000);
 }
 
 void OverlayWindow::SetClickThrough(bool enabled) {
     if (!window_) return;
-    auto style = GetWindowLongPtrW(window_, GWL_EXSTYLE);
-    if (enabled) style |= WS_EX_TRANSPARENT;
-    else style &= ~static_cast<LONG_PTR>(WS_EX_TRANSPARENT);
-    SetWindowLongPtrW(window_, GWL_EXSTYLE, style);
-    SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+    SetLastError(ERROR_SUCCESS);
+    const auto previous = GetWindowLongPtrW(window_, GWL_EXSTYLE);
+    if (previous == 0 && GetLastError() != ERROR_SUCCESS) {
+        RecordError(L"GetWindowLongPtrW");
+        return;
+    }
+    const auto next = enabled ? previous | WS_EX_TRANSPARENT
+                              : previous & ~static_cast<LONG_PTR>(WS_EX_TRANSPARENT);
+    SetLastError(ERROR_SUCCESS);
+    if (SetWindowLongPtrW(window_, GWL_EXSTYLE, next) == 0 && GetLastError() != ERROR_SUCCESS) {
+        RecordError(L"SetWindowLongPtrW");
+        return;
+    }
+    // Do not show here. A layered window may only become visible after a good frame.
+    if (!SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_,
+                      SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_NOZORDER)) {
+        RecordError(L"SetWindowPos(click-through)");
+    }
 }
 
 void OverlayWindow::BeginMove() {
     if (!window_) return;
     positioning_ = true;
+    dragging_ = false;
     positioningUntil_ = GetTickCount64() + 15'000;
     SetClickThrough(false);
     SetForegroundWindow(window_);
-    SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_,
-                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE);
+    RecordEvent(L"positioning started");
+    RefreshDiagnosticsBounds();
 }
 
 void OverlayWindow::ResetPosition() {
     position_ = {40, 40};
     ClampPosition();
     SavePosition();
-    if (window_) SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE | SWP_NOSIZE);
+    if (window_ && !SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE | SWP_NOSIZE)) {
+        RecordError(L"SetWindowPos(reset)");
+    }
+    RecordEvent(L"position reset");
+    RefreshDiagnosticsBounds();
 }
 
 void OverlayWindow::ClampPosition() {
@@ -110,8 +176,10 @@ void OverlayWindow::ClampPosition() {
     const int top = GetSystemMetrics(SM_YVIRTUALSCREEN);
     const int right = left + GetSystemMetrics(SM_CXVIRTUALSCREEN);
     const int bottom = top + GetSystemMetrics(SM_CYVIRTUALSCREEN);
-    position_.x = std::clamp(position_.x, static_cast<LONG>(left - width_ + 24), static_cast<LONG>(right - 24));
-    position_.y = std::clamp(position_.y, static_cast<LONG>(top - height_ + 24), static_cast<LONG>(bottom - 24));
+    const int maxX = std::max(left, right - width_);
+    const int maxY = std::max(top, bottom - height_);
+    position_.x = std::clamp(position_.x, static_cast<LONG>(left), static_cast<LONG>(maxX));
+    position_.y = std::clamp(position_.y, static_cast<LONG>(top), static_cast<LONG>(maxY));
 }
 
 void OverlayWindow::LoadPosition() {
@@ -119,7 +187,7 @@ void OverlayWindow::LoadPosition() {
     if (path.empty()) return;
     FILE* file = nullptr;
     if (_wfopen_s(&file, path.c_str(), L"rt") == 0 && file) {
-        std::fscanf(file, "%d %d", &position_.x, &position_.y);
+        fscanf_s(file, "%d %d", &position_.x, &position_.y);
         std::fclose(file);
     }
     ClampPosition();
@@ -140,37 +208,72 @@ void OverlayWindow::SavePosition() const {
 void OverlayWindow::Update(const ui::UiState& state, const domain::Settings& settings,
                            const domain::Schedule& schedule, std::int64_t nowMs) {
     if (!window_) return;
+
     if (positioning_ && GetTickCount64() >= positioningUntil_) {
         positioning_ = false;
+        dragging_ = false;
+        if (GetCapture() == window_) ReleaseCapture();
         SetClickThrough(true);
+        RecordEvent(L"positioning timeout");
     }
+
+    diagnostics_.mode = state.overlayMode;
+    diagnostics_.positioning = positioning_;
     if (state.panicStop || !state.overlayEnabled || !settings.overlayWindowEnabled) {
         Hide();
         return;
     }
-    const bool reminderActive = reminderUntil_ > GetTickCount64();
-    const bool toast = state.overlayMode == ui::OverlayMode::Toast || reminderActive;
-    const bool hasOverviewRows = std::any_of(state.overlayCategories.begin(), state.overlayCategories.end(),
+
+    const auto tick = GetTickCount64();
+    const bool reminderActive = reminderUntil_ > tick;
+    const bool toastMode = state.overlayMode == ui::OverlayMode::Toast;
+    const bool toast = toastMode || reminderActive;
+    const bool hasOverviewRows = std::any_of(
+        state.overlayCategories.begin(), state.overlayCategories.end(),
         [&state, index = std::size_t{0}](bool enabled) mutable {
             const bool visible = enabled && state.categories[index].enabled;
             ++index;
             return visible;
         });
-    if ((toast && !reminderActive && !positioning_) || (!toast && !hasOverviewRows)) {
+
+    // Idle toast mode is intentionally hidden. Positioning is the only exception.
+    if ((toastMode && !reminderActive && !positioning_) || (!toast && !hasOverviewRows && !positioning_)) {
         Hide();
         return;
     }
-    width_ = static_cast<int>(std::lround((toast ? 360.0f : 390.0f) * state.overlayScaleX));
-    height_ = static_cast<int>(std::lround((toast ? 84.0f : 150.0f) * state.overlayScaleY));
-    width_ = std::clamp(width_, 200, 900);
-    height_ = std::clamp(height_, 52, 360);
+
+    const float scaleX = std::clamp(state.overlayScaleX, 0.25f, 4.0f);
+    const float scaleY = std::clamp(state.overlayScaleY, 0.25f, 4.0f);
+    width_ = std::clamp(static_cast<int>(std::lround(304.0f * scaleX)), 160, 1200);
+
+    int visibleRows = 0;
+    for (std::size_t index = 0; index < state.overlayCategories.size(); ++index) {
+        if (state.overlayCategories[index] && state.categories[index].enabled) ++visibleRows;
+    }
+    const int logicalHeight = toast
+        ? 84
+        : std::max(1, 8 + visibleRows * 38 + std::max(0, visibleRows - 1) * 5);
+    height_ = std::clamp(static_cast<int>(std::lround(logicalHeight * scaleY)), 52, 720);
     ClampPosition();
-    SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE);
-    Render(state, settings, schedule, nowMs);
+    if (!SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE | SWP_NOSENDCHANGING)) {
+        RecordError(L"SetWindowPos(update)");
+        Hide();
+        return;
+    }
+
+    if (!Render(state, settings, schedule, nowMs)) {
+        Hide();
+        return;
+    }
+
     ShowWindow(window_, SW_SHOWNOACTIVATE);
+    diagnostics_.showSucceeded = IsWindowVisible(window_) != FALSE;
+    diagnostics_.visible = diagnostics_.showSucceeded;
+    if (!diagnostics_.showSucceeded) RecordError(L"ShowWindow");
+    RefreshDiagnosticsBounds();
 }
 
-void OverlayWindow::Render(const ui::UiState& state, const domain::Settings& settings,
+bool OverlayWindow::Render(const ui::UiState& state, const domain::Settings& settings,
                            const domain::Schedule&, std::int64_t) {
     ID2D1Factory* d2d = nullptr;
     IDWriteFactory* write = nullptr;
@@ -184,115 +287,267 @@ void OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
     HDC dc = nullptr;
     HBITMAP bitmap = nullptr;
     HBITMAP oldBitmap = nullptr;
+    bool rendered = false;
+    HRESULT result = S_OK;
 
-    D2D1_RENDER_TARGET_PROPERTIES properties{
+    const D2D1_RENDER_TARGET_PROPERTIES properties{
         D2D1_RENDER_TARGET_TYPE_DEFAULT,
         D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
         0, 0, D2D1_RENDER_TARGET_USAGE_NONE, D2D1_FEATURE_LEVEL_DEFAULT};
-    HRESULT result = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2d);
-    if (FAILED(result)) logOverlayFailure(L"D2D factory", result);
-    if (SUCCEEDED(result)) {
-        result = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&write));
-        if (FAILED(result)) logOverlayFailure(L"DirectWrite factory", result);
-    }
-    if (SUCCEEDED(result)) {
-        result = d2d->CreateDCRenderTarget(&properties, &target);
-        if (FAILED(result)) logOverlayFailure(L"D2D DC target", result);
-    }
-    const bool ready = SUCCEEDED(result);
-    if (ready) {
-        result = write->CreateTextFormat(L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL,
-                                         DWRITE_FONT_STRETCH_NORMAL, 16.0f, L"", &title);
-        if (SUCCEEDED(result)) result = write->CreateTextFormat(L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
-                                                                 DWRITE_FONT_STRETCH_NORMAL, 12.0f, L"", &body);
-        if (FAILED(result)) logOverlayFailure(L"text format", result);
-        if (FAILED(result)) goto cleanup;
-        dc = CreateCompatibleDC(nullptr);
-        if (!dc) logOverlayFailure(L"compatible DC");
-        BITMAPINFO info{};
-        info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-        info.bmiHeader.biWidth = width_;
-        info.bmiHeader.biHeight = -height_;
-        info.bmiHeader.biPlanes = 1;
-        info.bmiHeader.biBitCount = 32;
-        info.bmiHeader.biCompression = BI_RGB;
-        if (dc) bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, nullptr, nullptr, 0);
-        if (!bitmap) logOverlayFailure(L"DIB section");
-        if (bitmap) oldBitmap = static_cast<HBITMAP>(SelectObject(dc, bitmap));
-        if (!oldBitmap || oldBitmap == HGDI_ERROR) logOverlayFailure(L"DIB selection");
-        RECT rect{0, 0, width_, height_};
-        if (oldBitmap && oldBitmap != HGDI_ERROR) result = target->BindDC(dc, &rect);
-        else result = E_FAIL;
-        if (FAILED(result)) logOverlayFailure(L"D2D BindDC", result);
-        if (FAILED(result)) goto cleanup;
-        target->BeginDraw();
-        target->Clear(D2D1::ColorF(0, 0));
-        const auto bg = colorFromHex(settings.overlayBgHex);
-        result = target->CreateSolidColorBrush(D2D1::ColorF(bg[0], bg[1], bg[2], static_cast<float>(settings.overlayBgOpacity)), &background);
-        if (SUCCEEDED(result)) result = target->CreateSolidColorBrush(D2D1::ColorF(0.28f, 0.03f, 0.03f, static_cast<float>(settings.overlayLineBgOpacity)), &panel);
-        if (SUCCEEDED(result)) result = target->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1, 0.96f), &text);
-        if (SUCCEEDED(result)) result = target->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1, 0.62f), &muted);
-        if (FAILED(result)) {
-            logOverlayFailure(L"brush", result);
-            goto cleanup;
-        }
-        target->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), 8, 8), background);
 
-        const bool reminderToast = reminderUntil_ > GetTickCount64();
-        const bool toast = state.overlayMode == ui::OverlayMode::Toast || reminderToast;
-        const int count = toast ? 1 : std::max(1, static_cast<int>(std::count_if(
-            state.overlayCategories.begin(), state.overlayCategories.end(),
-            [&state, index = std::size_t{0}](bool enabled) mutable {
-                const bool visible = enabled && state.categories[index].enabled;
-                ++index;
-                return visible;
-            })));
-        const float gap = 5.0f;
-        const float row = (height_ - 8.0f - gap * (count - 1)) / count;
-        int drawn = 0;
-        if (reminderToast) {
-            target->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(4, 4, width_ - 4.0f, height_ - 4.0f), 5, 5), panel);
-            target->DrawTextW(reminderTitle_.c_str(), static_cast<UINT32>(reminderTitle_.size()), title,
-                              D2D1::RectF(13, 11, width_ - 13.0f, height_ * 0.52f), text);
-            target->DrawTextW(reminderBody_.c_str(), static_cast<UINT32>(reminderBody_.size()), body,
-                              D2D1::RectF(13, height_ * 0.52f, width_ - 13.0f, height_ - 11.0f), muted);
+    do {
+    result = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2d);
+    if (FAILED(result)) {
+        RecordError(L"D2D factory", result);
+        break;
+    }
+    result = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&write));
+    if (FAILED(result)) {
+        RecordError(L"DirectWrite factory", result);
+        break;
+    }
+    result = d2d->CreateDCRenderTarget(&properties, &target);
+    if (FAILED(result)) {
+        RecordError(L"D2D DC target", result);
+        break;
+    }
+    result = write->CreateTextFormat(L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD,
+                                     DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+                                     16.0f, L"", &title);
+    if (SUCCEEDED(result)) {
+        result = write->CreateTextFormat(L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL,
+                                         DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+                                         12.0f, L"", &body);
+    }
+    if (FAILED(result)) {
+        RecordError(L"text format", result);
+        break;
+    }
+
+    dc = CreateCompatibleDC(nullptr);
+    if (!dc) {
+        RecordError(L"CreateCompatibleDC");
+        break;
+    }
+    BITMAPINFO info{};
+    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = width_;
+    info.bmiHeader.biHeight = -height_; // top-down BGRA for D2D and layered windows
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    void* dibBits = nullptr;
+    bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &dibBits, nullptr, 0);
+    if (!bitmap || !dibBits) {
+        RecordError(L"CreateDIBSection");
+        break;
+    }
+    oldBitmap = static_cast<HBITMAP>(SelectObject(dc, bitmap));
+    if (!oldBitmap || oldBitmap == HGDI_ERROR) {
+        RecordError(L"SelectObject(DIB)");
+        break;
+    }
+
+    RECT rect{0, 0, width_, height_};
+    result = target->BindDC(dc, &rect);
+    if (FAILED(result)) {
+        RecordError(L"D2D BindDC", result);
+        break;
+    }
+    target->BeginDraw();
+    target->Clear(D2D1::ColorF(0, 0));
+    const auto bg = colorFromHex(settings.overlayBgHex);
+    result = target->CreateSolidColorBrush(
+        D2D1::ColorF(bg[0], bg[1], bg[2], static_cast<float>(settings.overlayBgOpacity)), &background);
+    if (SUCCEEDED(result)) {
+        result = target->CreateSolidColorBrush(
+            D2D1::ColorF(0.28f, 0.03f, 0.03f, static_cast<float>(settings.overlayLineBgOpacity)), &panel);
+    }
+    if (SUCCEEDED(result)) result = target->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1, 0.96f), &text);
+    if (SUCCEEDED(result)) result = target->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1, 0.62f), &muted);
+    if (FAILED(result)) {
+        RecordError(L"brush", result);
+        break;
+    }
+
+    target->FillRoundedRectangle(
+        D2D1::RoundedRect(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), 8, 8),
+        background);
+
+    const auto tick = GetTickCount64();
+    const bool reminderToast = reminderUntil_ > tick;
+    const bool toast = state.overlayMode == ui::OverlayMode::Toast || reminderToast;
+    const int count = toast
+        ? 1
+        : std::max(1, static_cast<int>(std::count_if(
+              state.overlayCategories.begin(), state.overlayCategories.end(),
+              [&state, index = std::size_t{0}](bool enabled) mutable {
+                  const bool visible = enabled && state.categories[index].enabled;
+                  ++index;
+                  return visible;
+              })));
+    const float gap = 5.0f;
+    const float row = (height_ - 8.0f - gap * (count - 1)) / count;
+    int drawn = 0;
+    if (reminderToast) {
+        target->FillRoundedRectangle(
+            D2D1::RoundedRect(D2D1::RectF(4, 4, width_ - 4.0f, height_ - 4.0f), 5, 5), panel);
+        target->DrawTextW(reminderTitle_.c_str(), static_cast<UINT32>(reminderTitle_.size()), title,
+                          D2D1::RectF(13, 11, width_ - 13.0f, height_ * 0.52f), text);
+        target->DrawTextW(reminderBody_.c_str(), static_cast<UINT32>(reminderBody_.size()), body,
+                          D2D1::RectF(13, height_ * 0.52f, width_ - 13.0f, height_ - 11.0f), muted);
+    }
+    if (positioning_) {
+        target->DrawTextW(L"Overlay ziehen", 13, body,
+                          D2D1::RectF(13, 7, width_ - 13.0f, 25), muted);
+    }
+    for (int i = 0; !toast && i < 3 && drawn < count; ++i) {
+        if (!state.overlayCategories[static_cast<std::size_t>(i)] ||
+            !state.categories[static_cast<std::size_t>(i)].enabled) {
+            continue;
         }
-        if (positioning_) {
-            target->DrawTextW(L"Overlay ziehen", 13, body,
-                              D2D1::RectF(13, 7, width_ - 13.0f, 25), muted);
+        const auto& category = state.categories[static_cast<std::size_t>(i)];
+        const float y = 4.0f + drawn * (row + gap);
+        target->FillRoundedRectangle(
+            D2D1::RoundedRect(D2D1::RectF(4, y, width_ - 4.0f, y + row), 5, 5), panel);
+        const auto titleRect = D2D1::RectF(13, y + 5, width_ * 0.54f, y + 28);
+        target->DrawTextW(category.title.c_str(), static_cast<UINT32>(category.title.size()), title,
+                          titleRect, text);
+        target->DrawTextW(category.countdown.c_str(), static_cast<UINT32>(category.countdown.size()), title,
+                          D2D1::RectF(width_ * 0.55f, y + 5, width_ - 13.0f, y + 28), text);
+        target->DrawTextW(category.eventTime.c_str(), static_cast<UINT32>(category.eventTime.size()), body,
+                          D2D1::RectF(13, y + row - 23, width_ - 13.0f, y + row - 5), muted);
+        ++drawn;
+    }
+    result = target->EndDraw();
+    if (FAILED(result)) {
+        RecordError(L"D2D EndDraw", result);
+        break;
+    }
+    if (!GdiFlush()) {
+        RecordError(L"GdiFlush");
+        break;
+    }
+    {
+        const auto* pixels = static_cast<const std::uint8_t*>(dibBits);
+        const auto pixelCount = static_cast<std::size_t>(width_) * static_cast<std::size_t>(height_);
+        std::uint64_t nonZeroAlpha = 0;
+        std::uint64_t nonZeroColor = 0;
+        std::uint8_t maxAlpha = 0;
+        for (std::size_t index = 0; index < pixelCount; ++index) {
+            // 32-bit DIB_RGB_COLORS is BGRA on Windows. D2D writes premultiplied BGRA.
+            const auto offset = index * 4;
+            const auto color = static_cast<std::uint8_t>(pixels[offset] | pixels[offset + 1] | pixels[offset + 2]);
+            const auto alpha = pixels[offset + 3];
+            if (color != 0) ++nonZeroColor;
+            if (alpha != 0) ++nonZeroAlpha;
+            maxAlpha = std::max(maxAlpha, alpha);
         }
-        for (int i = 0; !toast && i < 3 && drawn < count; ++i) {
-            if (!state.overlayCategories[static_cast<std::size_t>(i)] || !state.categories[static_cast<std::size_t>(i)].enabled) continue;
-            const auto& category = state.categories[static_cast<std::size_t>(i)];
-            const float y = 4.0f + drawn * (row + gap);
-            target->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(4, y, width_ - 4.0f, y + row), 5, 5), panel);
-            const auto titleRect = D2D1::RectF(13, y + 5, width_ * 0.54f, y + 28);
-            target->DrawTextW(category.title.c_str(), static_cast<UINT32>(category.title.size()), title, titleRect, text);
-            target->DrawTextW(category.countdown.c_str(), static_cast<UINT32>(category.countdown.size()), title,
-                              D2D1::RectF(width_ * 0.55f, y + 5, width_ - 13.0f, y + 28), text);
-            target->DrawTextW(category.eventTime.c_str(), static_cast<UINT32>(category.eventTime.size()), body,
-                              D2D1::RectF(13, y + row - 23, width_ - 13.0f, y + row - 5), muted);
-            ++drawn;
+        // Some WIC/GDI paths preserve D2D color channels but clear the DIB alpha
+        // byte. Recover those pixels before UpdateLayeredWindow rather than
+        // presenting a visibly existing but fully transparent HWND.
+        if (nonZeroAlpha == 0 && nonZeroColor != 0) {
+            auto* writablePixels = static_cast<std::uint8_t*>(dibBits);
+            for (std::size_t index = 0; index < pixelCount; ++index) {
+                const auto offset = index * 4;
+                if ((writablePixels[offset] | writablePixels[offset + 1] | writablePixels[offset + 2]) != 0) {
+                    writablePixels[offset + 3] = 0xFF;
+                }
+            }
+            nonZeroAlpha = nonZeroColor;
+            maxAlpha = 0xFF;
+            RecordEvent(L"alpha recovered from DIB color");
         }
-        result = target->EndDraw();
-        if (FAILED(result)) {
-            logOverlayFailure(L"D2D EndDraw", result);
-            goto cleanup;
+        diagnostics_.lastNonZeroAlphaPixels = nonZeroAlpha;
+        diagnostics_.lastNonZeroColorPixels = nonZeroColor;
+        diagnostics_.lastMaxAlpha = maxAlpha;
+        diagnostics_.lastFrameHadAlpha = nonZeroAlpha != 0;
+        if (!diagnostics_.lastFrameHadAlpha) {
+            RecordError(L"frame alpha is fully transparent", E_FAIL);
+            break;
         }
+    }
+    {
         POINT topLeft{position_.x, position_.y};
         SIZE size{width_, height_};
         BLENDFUNCTION blend{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
         if (!UpdateLayeredWindow(window_, nullptr, &topLeft, &size, dc, nullptr, 0, &blend, ULW_ALPHA)) {
-            logOverlayFailure(L"UpdateLayeredWindow");
+            RecordError(L"UpdateLayeredWindow");
+            break;
         }
     }
+    rendered = true;
+    diagnostics_.renderSucceeded = true;
+    diagnostics_.lastHresult = S_OK;
+    diagnostics_.lastWin32Error = ERROR_SUCCESS;
+    diagnostics_.lastError.clear();
+    diagnostics_.lastSuccessfulFrameTick = GetTickCount64();
+    RecordEvent(L"frame rendered");
+    } while (false);
 
-cleanup:
     if (oldBitmap && dc) SelectObject(dc, oldBitmap);
     if (bitmap) DeleteObject(bitmap);
     if (dc) DeleteDC(dc);
-    release(background); release(panel); release(text); release(muted);
-    release(title); release(body); release(target); release(write); release(d2d);
+    release(background);
+    release(panel);
+    release(text);
+    release(muted);
+    release(title);
+    release(body);
+    release(target);
+    release(write);
+    release(d2d);
+    if (!rendered) diagnostics_.renderSucceeded = false;
+    return rendered;
+}
+
+void OverlayWindow::RecordEvent(const wchar_t* event) {
+    if (!event) return;
+    if (diagnostics_.recentEventCount < diagnostics_.recentEvents.size()) {
+        diagnostics_.recentEvents[diagnostics_.recentEventCount++] = event;
+    } else {
+        for (std::size_t index = 1; index < diagnostics_.recentEvents.size(); ++index) {
+            diagnostics_.recentEvents[index - 1] = std::move(diagnostics_.recentEvents[index]);
+        }
+        diagnostics_.recentEvents.back() = event;
+    }
+}
+
+void OverlayWindow::RecordError(const wchar_t* step, HRESULT result, DWORD win32Error) {
+    if (!step) return;
+    if (win32Error == ERROR_SUCCESS && SUCCEEDED(result)) win32Error = GetLastError();
+    diagnostics_.lastHresult = result;
+    diagnostics_.lastWin32Error = win32Error;
+    wchar_t message[256]{};
+    if (FAILED(result)) {
+        swprintf_s(message, L"%s failed (HRESULT 0x%08X)", step, static_cast<unsigned>(result));
+    } else {
+        swprintf_s(message, L"%s failed (Win32 %lu)", step, static_cast<unsigned long>(win32Error));
+    }
+    diagnostics_.lastError = message;
+    OutputDebugStringW(message);
+    OutputDebugStringW(L"\n");
+    RecordEvent(message);
+}
+
+void OverlayWindow::RefreshDiagnosticsBounds() {
+    diagnostics_.hwnd = window_;
+    diagnostics_.positioning = positioning_;
+    diagnostics_.visible = window_ && IsWindowVisible(window_) != FALSE;
+    if (window_) {
+        if (!GetWindowRect(window_, &diagnostics_.bounds)) RecordError(L"GetWindowRect");
+    } else {
+        diagnostics_.bounds = {};
+    }
+}
+
+OverlayDiagnostics OverlayWindow::GetDiagnostics() const {
+    auto result = diagnostics_;
+    result.hwnd = window_;
+    result.visible = window_ && IsWindowVisible(window_) != FALSE;
+    result.positioning = positioning_;
+    if (window_) GetWindowRect(window_, &result.bounds);
+    return result;
 }
 
 LRESULT CALLBACK OverlayWindow::WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -302,26 +557,33 @@ LRESULT CALLBACK OverlayWindow::WindowProc(HWND window, UINT message, WPARAM wPa
         SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
         self->window_ = window;
     }
-    return self ? self->HandleMessage(message, wParam, lParam) : DefWindowProcW(window, message, wParam, lParam);
+    return self ? self->HandleMessage(message, wParam, lParam)
+                : DefWindowProcW(window, message, wParam, lParam);
 }
 
 LRESULT OverlayWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
-    case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
+    case WM_MOUSEACTIVATE:
+        return MA_NOACTIVATE;
     case WM_LBUTTONDOWN:
         if (positioning_) {
             dragging_ = true;
-            POINT cursor{}; GetCursorPos(&cursor);
+            POINT cursor{};
+            GetCursorPos(&cursor);
             dragOffset_ = {cursor.x - position_.x, cursor.y - position_.y};
-            SetCapture(window_);
+            if (!SetCapture(window_)) RecordError(L"SetCapture");
         }
         return 0;
     case WM_MOUSEMOVE:
         if (dragging_ && (wParam & MK_LBUTTON)) {
-            POINT cursor{}; GetCursorPos(&cursor);
+            POINT cursor{};
+            GetCursorPos(&cursor);
             position_ = {cursor.x - dragOffset_.x, cursor.y - dragOffset_.y};
             ClampPosition();
-            SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE);
+            if (!SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE)) {
+                RecordError(L"SetWindowPos(drag)");
+            }
+            RefreshDiagnosticsBounds();
         }
         return 0;
     case WM_LBUTTONUP:
@@ -332,10 +594,25 @@ LRESULT OverlayWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
             if (GetCapture() == window_) ReleaseCapture();
             SavePosition();
             SetClickThrough(true);
+            RecordEvent(L"position saved");
+            RefreshDiagnosticsBounds();
         }
         return 0;
-    case WM_NCHITTEST: return positioning_ ? HTCLIENT : HTTRANSPARENT;
-    default: return DefWindowProcW(window_, message, wParam, lParam);
+    case WM_CANCELMODE:
+        if (dragging_) {
+            dragging_ = false;
+            positioning_ = false;
+            positioningUntil_ = 0;
+            if (GetCapture() == window_) ReleaseCapture();
+            SavePosition();
+            SetClickThrough(true);
+            RecordEvent(L"position cancelled");
+        }
+        return 0;
+    case WM_NCHITTEST:
+        return positioning_ ? HTCLIENT : HTTRANSPARENT;
+    default:
+        return DefWindowProcW(window_, message, wParam, lParam);
     }
 }
 

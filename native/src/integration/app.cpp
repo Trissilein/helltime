@@ -99,7 +99,10 @@ int NativeApp::Run() {
     }
     if (FAILED(ui_.Initialize(window_))) { DestroyWindow(window_); CoUninitialize(); return 1; }
     settings_ = domain::loadSettings();
-    overlay_.Create(instance_);
+    if (!overlay_.Create(instance_)) {
+        // Keep the main window usable when the optional layered overlay cannot initialize.
+        OutputDebugStringW(L"Helltime overlay initialization failed; continuing without overlay.\n");
+    }
     CreateTray();
     timer_ = SetTimer(window_, kTimerId, 1000, nullptr);
     Refresh(false);
@@ -234,7 +237,7 @@ void NativeApp::ApplyAction(const ui::UiAction& action) {
     case ui::ActionKind::SetOverlayScaleY: settings_.overlayScaleY = action.value; break;
     case ui::ActionKind::SetOverlayOpacity: settings_.overlayBgOpacity = action.value; break;
     case ui::ActionKind::PreviewOverlay:
-        overlay_.ShowReminderToast(L"Helltime Vorschau", L"Nächster Timer: 00:30");
+        overlay_.ShowPreviewToast(L"Helltime Vorschau", L"Nächster Timer: 00:30");
         Refresh(true);
         return;
     case ui::ActionKind::BeginOverlayMove:
