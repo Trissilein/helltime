@@ -27,6 +27,8 @@ constexpr UINT kTrayMoveOverlay = 1003;
 constexpr UINT kTrayOpenUrl = 1004;
 constexpr UINT kTrayResetPanic = 1005;
 constexpr UINT kTrayExit = 1006;
+constexpr UINT kTrayToggleOverlay = 1007;
+constexpr UINT kTrayToggleReminders = 1008;
 
 std::wstring countdown(std::int64_t milliseconds) {
     if (milliseconds <= 0) return L"READY";
@@ -268,10 +270,38 @@ void NativeApp::ShowReminderToast(const wchar_t* title, const wchar_t* text) {
     Shell_NotifyIconW(NIM_MODIFY, &tray_);
 }
 
+void NativeApp::ToggleAllRemindersFromTray() {
+    const bool anyEnabled = std::any_of(settings_.categories.begin(), settings_.categories.end(),
+        [](const auto& category) { return category.enabled; });
+    if (anyEnabled) {
+        for (std::size_t index = 0; index < settings_.categories.size(); ++index) {
+            trayReminderArchive_[index] = settings_.categories[index].enabled;
+            settings_.categories[index].enabled = false;
+        }
+    } else {
+        const bool hasArchivedCategory = std::any_of(trayReminderArchive_.begin(), trayReminderArchive_.end(),
+            [](bool enabled) { return enabled; });
+        for (std::size_t index = 0; index < settings_.categories.size(); ++index) {
+            settings_.categories[index].enabled = hasArchivedCategory ? trayReminderArchive_[index] : true;
+        }
+    }
+    settings_ = domain::normalizeSettings(settings_);
+    domain::saveSettings(settings_);
+    previousNowMs_.reset();
+    Refresh(true);
+}
+
 void NativeApp::ShowTrayMenu() {
     POINT point{}; GetCursorPos(&point);
     HMENU menu = CreatePopupMenu();
     AppendMenuW(menu, MF_STRING, kTrayShow, IsWindowVisible(window_) ? L"Fenster verstecken" : L"Fenster anzeigen");
+    AppendMenuW(menu, MF_STRING | (settings_.overlayWindowEnabled ? MF_CHECKED : MF_UNCHECKED),
+                kTrayToggleOverlay, L"Overlay");
+    const bool anyReminderEnabled = std::any_of(settings_.categories.begin(), settings_.categories.end(),
+        [](const auto& category) { return category.enabled; });
+    AppendMenuW(menu, MF_STRING | (anyReminderEnabled ? MF_CHECKED : MF_UNCHECKED),
+                kTrayToggleReminders, L"Erinnerungen");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING, kTraySettings, L"Einstellungen");
     AppendMenuW(menu, MF_STRING, kTrayMoveOverlay, L"Overlay verschieben");
     AppendMenuW(menu, MF_STRING, kTrayOpenUrl, L"Helltides öffnen");
@@ -282,6 +312,13 @@ void NativeApp::ShowTrayMenu() {
     DestroyMenu(menu);
     switch (command) {
     case kTrayShow: SetVisible(!IsWindowVisible(window_)); break;
+    case kTrayToggleOverlay:
+        settings_.overlayWindowEnabled = !settings_.overlayWindowEnabled;
+        settings_ = domain::normalizeSettings(settings_);
+        domain::saveSettings(settings_);
+        Refresh(true);
+        break;
+    case kTrayToggleReminders: ToggleAllRemindersFromTray(); break;
     case kTraySettings: SetVisible(true); ui_.OpenSettings(); break;
     case kTrayMoveOverlay: overlay_.BeginMove(); break;
     case kTrayOpenUrl: ShellExecuteW(nullptr, L"open", L"https://helltides.com/", nullptr, nullptr, SW_SHOWNORMAL); break;

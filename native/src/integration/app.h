@@ -10,6 +10,7 @@
 #include <windows.h>
 #include <shellapi.h>
 
+#include <array>
 #include <optional>
 
 namespace helltime::integration {
@@ -32,6 +33,7 @@ private:
     void ShowTrayMenu();
     void ShowReminderToast(const wchar_t* title, const wchar_t* text);
     void SetVisible(bool visible);
+    void ToggleAllRemindersFromTray();
 
     HINSTANCE instance_{nullptr};
     HWND window_{nullptr};
@@ -41,6 +43,7 @@ private:
     domain::Settings settings_{};
     domain::Schedule schedule_{};
     std::optional<std::int64_t> previousNowMs_{};
+    std::array<bool, 3> trayReminderArchive_{true, true, true};
     ui::MainWindowUi ui_;
     OverlayWindow overlay_;
 };
