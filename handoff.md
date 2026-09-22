@@ -42,8 +42,8 @@ höchstens etwa 15–20 % vertretbar.
   Positions-Reset (`d3265d0`). Rendering-Fehler des Overlays werden für D2D,
   DirectWrite, DC/DIB, BindDC, EndDraw und UpdateLayeredWindow protokolliert
   (`ffba24c`).
-- Letzter portabler Release-Build nach Quellstand `ffba24c`: 455.168 B,
-  SHA-256 `AE702162F0939A8C936BBCC60B16637BE5284C7A6EA2EB1634931C062EF1C251`.
+- Letzter portabler Release-Build nach Quellstand `ef312af`: 455.168 B,
+  SHA-256 `5C900A18AB0B02BFD19B6D0759C6552EF5FE29E3583D3AC41F5973374E004EC5`.
   CTest 1/1 bestanden; PDB nicht in `dist`; Tauri-Artefakt unverändert.
 - Offene Abnahme bleibt: echter Screenshot-/Overlay-/Audio-/DPI-Test. Ein
   Prozess-Smoke-Test ist kein visueller Beleg.
@@ -51,7 +51,7 @@ höchstens etwa 15–20 % vertretbar.
 - Original: `dist\helltime.exe` (Tauri)
 - Native: `dist\helltime-native.exe` (Win32, C++20/Direct2D/DirectWrite)
 - Native-Artefakt beim letzten technischen Check: 455.168 B
-- SHA-256: `AE702162F0939A8C936BBCC60B16637BE5284C7A6EA2EB1634931C062EF1C251`
+- SHA-256: `5C900A18AB0B02BFD19B6D0759C6552EF5FE29E3583D3AC41F5973374E004EC5`
 - Letzte technische Checks: VS18-Release-Build, `CTest` 1/1, 2-s-Prozessstart
 - Vorbestehend und absichtlich unberührt: untracked `AGENTS.md`, `mempalace.yaml`
 
