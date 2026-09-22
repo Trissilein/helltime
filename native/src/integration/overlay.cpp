@@ -289,7 +289,7 @@ LRESULT OverlayWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
             SetClickThrough(true);
         }
         return 0;
-    case WM_NCHITTEST: return dragging_ ? HTCLIENT : HTTRANSPARENT;
+    case WM_NCHITTEST: return positioning_ ? HTCLIENT : HTTRANSPARENT;
     default: return DefWindowProcW(window_, message, wParam, lParam);
     }
 }
