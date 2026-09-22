@@ -479,12 +479,15 @@ struct MainWindowUi::Impl {
         const D2D1_RECT_F preview = D2D1::RectF(behavior.left + 12.0f, y + 102.0f, behavior.left + 86.0f, y + 128.0f);
         const D2D1_RECT_F position = D2D1::RectF(behavior.left + 92.0f, y + 102.0f, behavior.left + 184.0f, y + 128.0f);
         const D2D1_RECT_F resetPosition = D2D1::RectF(behavior.left + 190.0f, y + 102.0f, behavior.left + 294.0f, y + 128.0f);
-        DrawButton(preview, L"Vorschau", true);
-        DrawButton(position, L"Position", true);
-        DrawButton(resetPosition, L"Reset Position");
-        AddHit(preview, HitKind::PreviewOverlay);
-        AddHit(position, HitKind::BeginOverlayMove);
-        AddHit(resetPosition, HitKind::ResetOverlayPosition);
+        const bool overlayControlsEnabled = state.overlayEnabled && !state.panicStop;
+        DrawButton(preview, L"Vorschau", overlayControlsEnabled);
+        DrawButton(position, L"Position", overlayControlsEnabled);
+        DrawButton(resetPosition, L"Reset Position", overlayControlsEnabled);
+        if (overlayControlsEnabled) {
+            AddHit(preview, HitKind::PreviewOverlay);
+            AddHit(position, HitKind::BeginOverlayMove);
+            AddHit(resetPosition, HitKind::ResetOverlayPosition);
+        }
         y += 148.0f;
 
         const D2D1_RECT_F look = D2D1::RectF(controlLeft, y, right, y + 150.0f);

@@ -228,15 +228,25 @@ void OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
         target->BeginDraw();
         target->Clear(D2D1::ColorF(0, 0));
         const auto bg = colorFromHex(settings.overlayBgHex);
-        target->CreateSolidColorBrush(D2D1::ColorF(bg[0], bg[1], bg[2], static_cast<float>(settings.overlayBgOpacity)), &background);
-        target->CreateSolidColorBrush(D2D1::ColorF(0.28f, 0.03f, 0.03f, static_cast<float>(settings.overlayLineBgOpacity)), &panel);
-        target->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1, 0.96f), &text);
-        target->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1, 0.62f), &muted);
+        result = target->CreateSolidColorBrush(D2D1::ColorF(bg[0], bg[1], bg[2], static_cast<float>(settings.overlayBgOpacity)), &background);
+        if (SUCCEEDED(result)) result = target->CreateSolidColorBrush(D2D1::ColorF(0.28f, 0.03f, 0.03f, static_cast<float>(settings.overlayLineBgOpacity)), &panel);
+        if (SUCCEEDED(result)) result = target->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1, 0.96f), &text);
+        if (SUCCEEDED(result)) result = target->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1, 0.62f), &muted);
+        if (FAILED(result)) {
+            logOverlayFailure(L"brush", result);
+            goto cleanup;
+        }
         target->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), 8, 8), background);
 
         const bool reminderToast = reminderUntil_ > GetTickCount64();
         const bool toast = state.overlayMode == ui::OverlayMode::Toast || reminderToast;
-        const int count = toast ? 1 : 3;
+        const int count = toast ? 1 : std::max(1, static_cast<int>(std::count_if(
+            state.overlayCategories.begin(), state.overlayCategories.end(),
+            [&state, index = std::size_t{0}](bool enabled) mutable {
+                const bool visible = enabled && state.categories[index].enabled;
+                ++index;
+                return visible;
+            })));
         const float gap = 5.0f;
         const float row = (height_ - 8.0f - gap * (count - 1)) / count;
         int drawn = 0;

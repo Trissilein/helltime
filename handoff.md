@@ -11,9 +11,7 @@ Basis vor diesem Handoff: `13b490c feat: add native Win32 Helltime client`
 - Overlay-Lifecycle: Toast bleibt ohne Reminder verborgen; Reminder kann Overview
   temporär ersetzen; leere Overview versteckt sich; Tray-Positionieren wartet auf
   echten Mausklick und läuft nach 15 s wieder click-through aus.
-- Letzter Build nach Overlay-Fix: CTest 1/1 bestanden, Native 448.512 B,
-  SHA-256 `E150428E1D0C94F1AEC782CB7D267E16060C2FC5E8604C09D141438C11E89391`.
-  Tauri-Hash blieb unverändert.
+- Aktueller Release-Nachweis steht im Abschnitt „Artefakte und Git-Stand“.
 
 Diese Änderungen sind noch keine visuelle Abnahme. Die verbleibenden Abschnitte
 dieser Übergabe gelten weiter.
@@ -44,13 +42,16 @@ höchstens etwa 15–20 % vertretbar.
   Positions-Reset (`d3265d0`). Rendering-Fehler des Overlays werden für D2D,
   DirectWrite, DC/DIB, BindDC, EndDraw und UpdateLayeredWindow protokolliert
   (`ffba24c`).
+- Letzter portabler Release-Build nach Quellstand `ffba24c`: 455.168 B,
+  SHA-256 `AE702162F0939A8C936BBCC60B16637BE5284C7A6EA2EB1634931C062EF1C251`.
+  CTest 1/1 bestanden; PDB nicht in `dist`; Tauri-Artefakt unverändert.
 - Offene Abnahme bleibt: echter Screenshot-/Overlay-/Audio-/DPI-Test. Ein
   Prozess-Smoke-Test ist kein visueller Beleg.
 
 - Original: `dist\helltime.exe` (Tauri)
 - Native: `dist\helltime-native.exe` (Win32, C++20/Direct2D/DirectWrite)
-- Native-Artefakt beim letzten technischen Check: 446.976 B
-- SHA-256: `BB91D2A6A1610BC37C32F4A4C04A3A98670BA29EB2E10E4DFD7D9EDF69AAF50A`
+- Native-Artefakt beim letzten technischen Check: 455.168 B
+- SHA-256: `AE702162F0939A8C936BBCC60B16637BE5284C7A6EA2EB1634931C062EF1C251`
 - Letzte technische Checks: VS18-Release-Build, `CTest` 1/1, 2-s-Prozessstart
 - Vorbestehend und absichtlich unberührt: untracked `AGENTS.md`, `mempalace.yaml`
 
@@ -58,34 +59,30 @@ höchstens etwa 15–20 % vertretbar.
 
 ### Hauptfenster
 
-- Falsches Grundlayout: drei breite horizontale Karten statt der gestapelten,
-  zentrierten Tauri-Karten.
+- Struktur der Karten ist korrigiert; Typografie, Rahmen, Abstände und Farben
+  sind noch nicht screenshot-geprüft.
 - Große ungenutzte schwarze Fläche; Höhe und Inhalt reagieren nicht wie im Original.
 - Abweichende Typografie, Rahmen, Abstände, Farben, Titelbar und Bedienmuster.
-- Interne TTS-Namen erscheinen fälschlich in den Karten; `{boss}` wird sichtbar.
-- Aufgeklappte Karten wachsen nicht sauber im Layout: der Overlay-Footer überdeckt
-  Timer-Inhalt und Bedienelemente.
-- Encoding-Fehler sichtbar: `Höhe` erscheint als `HÃ¶he`.
+- TTS-Namen, Footer-Überlappung und UTF-8-Fehler wurden korrigiert; echte
+  Screenshot-Abnahme bleibt offen.
 
 ### Settings
 
-Fehlen oder sind nicht gleichwertig: Overlay-Status, Vorschau, Positionieren,
-Positions-Reset, Hintergrundfarbe, Zeilen-Hintergrund-Deckkraft, vollständige
-Sound-/Timer-Bedienung, TTS-Name, Audiotest, Debug-Status, Scroll-/Responsive-Verhalten.
+Fehlen oder sind nicht gleichwertig: Hintergrundfarbe, Zeilen-Hintergrund-Deckkraft,
+vollständige Sound-/Timer-Bedienung, TTS-Name, Audiotest, Debug-Status,
+Scroll-/Responsive-Verhalten.
 Mehrere Werte haben zu wenig Kontrast.
 
 ### Overlay
 
 - **Release-Blocker.** Kein manueller Funktionsbeleg für sichtbares Ingame-Overlay.
-- Native erzwingt im Tick `SWP_SHOWWINDOW`; Toast-Modus bleibt daher nicht bis zum
-  Reminder verborgen. Siehe `native/src/integration/overlay.cpp`.
-- Ohne Reminder rendert Toast-Modus eine Kategorie statt leer zu bleiben.
-- Native hat starre Größe und feste Kategorie-Reihenfolge.
+- Toast bleibt ohne Reminder verborgen; Overview skaliert nach sichtbaren Zeilen.
+- Native hat noch vereinfachtes Layout und feste Kategorie-Reihenfolge.
 - Es fehlen Original-Look und -Verhalten: Typfarben, Gradients, Akzentleisten,
-  Schatten, Boss-Unterzeile, sichtbarer Positioniermodus, 15-s-Rückkehr zu
-  click-through, Vorschau und Reset.
-- `UpdateLayeredWindow`, Direct2D- und DC-Fehler werden nicht geprüft oder geloggt;
-  damit bleibt ein unsichtbares Overlay nicht diagnostizierbar.
+  Schatten und Boss-Unterzeile. Positioniermodus, 15-s-Rückkehr, Vorschau und
+  Reset sind implementiert, aber nicht manuell belegt.
+- Rendering-Fehler werden diagnostiziert, doch ein echter Sichtbarkeitstest bleibt
+  nötig.
 
 ## Was tatsächlich vorhanden ist
 
