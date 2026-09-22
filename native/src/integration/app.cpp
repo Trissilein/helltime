@@ -67,6 +67,36 @@ const std::vector<domain::ScheduleItem>& itemsFor(const domain::Schedule& schedu
     return schedule.worldBoss;
 }
 
+ui::OverlayDiagnosticsView toUiOverlayDiagnostics(const OverlayDiagnostics& source) {
+    ui::OverlayDiagnosticsView result{};
+    result.hwnd = reinterpret_cast<std::uintptr_t>(source.hwnd);
+    result.exists = source.created && source.hwnd != nullptr;
+    result.visible = source.visible;
+    result.renderSucceeded = source.renderSucceeded;
+    result.showSucceeded = source.showSucceeded;
+    result.updateLayeredWindowSucceeded = source.updateLayeredWindowSucceeded;
+    result.positioning = source.positioning;
+    result.mode = source.mode;
+    result.bounds = source.bounds;
+    result.lastHresult = source.lastHresult;
+    result.lastWin32Error = source.lastWin32Error;
+    result.lastError = source.lastError;
+    result.lastSuccessfulFrameTick = source.lastSuccessfulFrameTick;
+    result.nonZeroAlphaPixels = source.lastNonZeroAlphaPixels;
+    result.nonZeroColorPixels = source.lastNonZeroColorPixels;
+    result.maxAlpha = source.lastMaxAlpha;
+    result.frameHadAlpha = source.lastFrameHadAlpha;
+    result.gatePanicStop = source.gatePanicStop;
+    result.gateOverlayEnabled = source.gateOverlayEnabled;
+    result.gateSettingsEnabled = source.gateSettingsEnabled;
+    result.gateOverviewRows = source.gateOverviewRows;
+    result.gateToastMode = source.gateToastMode;
+    result.gateReminderActive = source.gateReminderActive;
+    result.recentEvents = source.recentEvents;
+    result.recentEventCount = source.recentEventCount;
+    return result;
+}
+
 } // namespace
 
 NativeApp::NativeApp(HINSTANCE instance, int showCommand)
@@ -182,6 +212,8 @@ void NativeApp::Refresh(bool preserveUiState) {
     }
     ui_.SetState(next);
     overlay_.Update(next, settings_, schedule_, now);
+    next.overlayDiagnostics = toUiOverlayDiagnostics(overlay_.GetDiagnostics());
+    ui_.SetState(next);
     InvalidateRect(window_, nullptr, FALSE);
 }
 
@@ -248,6 +280,16 @@ void NativeApp::ApplyAction(const ui::UiAction& action) {
         overlay_.ResetPosition();
         Refresh(true);
         return;
+    case ui::ActionKind::RefreshOverlayDiagnostics:
+        Refresh(true);
+        return;
+    case ui::ActionKind::ClearOverlayDiagnostics: {
+        overlay_.ClearDiagnostics();
+        auto current = ui_.State();
+        current.overlayDiagnostics = toUiOverlayDiagnostics(overlay_.GetDiagnostics());
+        ui_.SetState(std::move(current));
+        return;
+    }
     case ui::ActionKind::SetVolume: settings_.volume = action.value; break;
     case ui::ActionKind::SetSoundEnabled: settings_.soundEnabled = action.enabled; break;
     case ui::ActionKind::SetAutoRefreshEnabled: settings_.autoRefreshEnabled = action.enabled; break;

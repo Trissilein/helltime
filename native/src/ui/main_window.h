@@ -5,6 +5,7 @@
 #include <windows.h>
 
 #include <array>
+#include <cstdint>
 #include <functional>
 #include <string>
 
@@ -39,6 +40,8 @@ enum class ActionKind : unsigned char {
     PreviewOverlay,
     BeginOverlayMove,
     ResetOverlayPosition,
+    RefreshOverlayDiagnostics,
+    ClearOverlayDiagnostics,
     SetVolume,
     SetSoundEnabled,
     SetAutoRefreshEnabled,
@@ -85,6 +88,34 @@ struct CategoryView {
     std::array<TimerView, 3> timers{};
 };
 
+struct OverlayDiagnosticsView {
+    std::uintptr_t hwnd{0};
+    bool exists{false};
+    bool visible{false};
+    bool renderSucceeded{false};
+    bool showSucceeded{false};
+    bool updateLayeredWindowSucceeded{false};
+    bool positioning{false};
+    OverlayMode mode{OverlayMode::Overview};
+    RECT bounds{};
+    HRESULT lastHresult{S_OK};
+    DWORD lastWin32Error{ERROR_SUCCESS};
+    std::wstring lastError{};
+    ULONGLONG lastSuccessfulFrameTick{0};
+    std::uint64_t nonZeroAlphaPixels{0};
+    std::uint64_t nonZeroColorPixels{0};
+    std::uint8_t maxAlpha{0};
+    bool frameHadAlpha{false};
+    bool gatePanicStop{false};
+    bool gateOverlayEnabled{false};
+    bool gateSettingsEnabled{false};
+    bool gateOverviewRows{false};
+    bool gateToastMode{false};
+    bool gateReminderActive{false};
+    std::array<std::wstring, 8> recentEvents{};
+    std::size_t recentEventCount{0};
+};
+
 struct UiState {
     std::array<CategoryView, 3> categories{};
     bool panicStop{false};
@@ -98,6 +129,7 @@ struct UiState {
     bool soundEnabled{true};
     bool autoRefreshEnabled{false};
     bool systemToastsEnabled{false};
+    OverlayDiagnosticsView overlayDiagnostics{};
 };
 
 struct UiCallbacks {

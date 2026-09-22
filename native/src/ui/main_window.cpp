@@ -88,6 +88,9 @@ struct MainWindowUi::Impl {
         PreviewOverlay,
         BeginOverlayMove,
         ResetOverlayPosition,
+        ToggleOverlayDebug,
+        RefreshOverlayDiagnostics,
+        ClearOverlayDiagnostics,
         Volume,
         SoundEnabled,
         AutoRefreshEnabled,
@@ -107,6 +110,7 @@ struct MainWindowUi::Impl {
     UiState state{};
     UiCallbacks callbacks{};
     bool settingsOpen{false};
+    bool overlayDebugOpen{false};
     std::vector<Hit> hits{};
     HitKind dragging{HitKind::Settings};
     Category draggingCategory{Category::Helltide};
@@ -530,6 +534,62 @@ struct MainWindowUi::Impl {
             AddHit(reset, HitKind::PanicReset);
         }
 
+        const D2D1_RECT_F debugToggle = D2D1::RectF(controlLeft, y + 102.0f, controlLeft + 70.0f, y + 126.0f);
+        DrawButton(debugToggle, L"Debug", overlayDebugOpen);
+        AddHit(debugToggle, HitKind::ToggleOverlayDebug);
+        if (overlayDebugOpen) {
+            const float debugTop = y + 134.0f;
+            const float debugBottom = std::min(modal.bottom - 8.0f, debugTop + 148.0f);
+            if (debugBottom > debugTop + 58.0f) {
+                const D2D1_RECT_F debug = D2D1::RectF(controlLeft, debugTop, right, debugBottom);
+                DrawModalSection(debug);
+                Text(L"Overlay Debug", headingFormat, textBrush,
+                     D2D1::RectF(debug.left + 12.0f, debug.top + 5.0f, debug.right - 12.0f, debug.top + 23.0f));
+                const D2D1_RECT_F refresh = D2D1::RectF(debug.left + 12.0f, debug.top + 26.0f, debug.left + 106.0f, debug.top + 48.0f);
+                const D2D1_RECT_F clear = D2D1::RectF(debug.left + 112.0f, debug.top + 26.0f, debug.left + 204.0f, debug.top + 48.0f);
+                DrawButton(refresh, L"Overlay Status");
+                DrawButton(clear, L"Logs leeren");
+                AddHit(refresh, HitKind::RefreshOverlayDiagnostics);
+                AddHit(clear, HitKind::ClearOverlayDiagnostics);
+
+                const auto& diag = state.overlayDiagnostics;
+                const auto onOff = [](bool value) -> const wchar_t* { return value ? L"ja" : L"nein"; };
+                const auto mode = diag.mode == OverlayMode::Toast ? L"Toast" : L"Overview";
+                const float lineTop = debug.top + 52.0f;
+                Text(L"HWND=" + std::to_wstring(static_cast<unsigned long long>(diag.hwnd)) +
+                         L" existiert=" + onOff(diag.exists) + L" sichtbar=" + onOff(diag.visible) +
+                         L" show=" + onOff(diag.showSucceeded) + L" pos=" + onOff(diag.positioning) + L" Modus=" + mode,
+                     smallFormat, mutedBrush, D2D1::RectF(debug.left + 12.0f, lineTop, debug.right - 12.0f, lineTop + 12.0f));
+                Text(L"Bounds=" + std::to_wstring(diag.bounds.left) + L"," + std::to_wstring(diag.bounds.top) +
+                         L" " + std::to_wstring(diag.bounds.right - diag.bounds.left) + L"x" +
+                         std::to_wstring(diag.bounds.bottom - diag.bounds.top) + L" Frame=" + onOff(diag.renderSucceeded) +
+                         L" UWL=" + onOff(diag.updateLayeredWindowSucceeded),
+                     smallFormat, mutedBrush, D2D1::RectF(debug.left + 12.0f, lineTop + 13.0f, debug.right - 12.0f, lineTop + 25.0f));
+                Text(L"Alpha=" + std::to_wstring(diag.nonZeroAlphaPixels) + L" RGB=" +
+                         std::to_wstring(diag.nonZeroColorPixels) + L" maxA=" + std::to_wstring(diag.maxAlpha) +
+                         L" frameAlpha=" + onOff(diag.frameHadAlpha) + L" frameTick=" +
+                         std::to_wstring(diag.lastSuccessfulFrameTick),
+                     smallFormat, mutedBrush, D2D1::RectF(debug.left + 12.0f, lineTop + 26.0f, debug.right - 12.0f, lineTop + 38.0f));
+                Text(std::wstring{L"Gates P="} + onOff(diag.gatePanicStop) + L" O=" + onOff(diag.gateOverlayEnabled) +
+                         L" S=" + onOff(diag.gateSettingsEnabled) + L" rows=" + onOff(diag.gateOverviewRows) +
+                         L" toast=" + onOff(diag.gateToastMode) + L" reminder=" + onOff(diag.gateReminderActive),
+                     smallFormat, mutedBrush, D2D1::RectF(debug.left + 12.0f, lineTop + 39.0f, debug.right - 12.0f, lineTop + 51.0f));
+                Text(L"Win32=" + std::to_wstring(diag.lastWin32Error) + L" HRESULT=" +
+                         std::to_wstring(static_cast<long>(diag.lastHresult)) + L" " + diag.lastError,
+                     smallFormat, diag.lastError.empty() ? mutedBrush : textBrush,
+                     D2D1::RectF(debug.left + 12.0f, lineTop + 52.0f, debug.right - 12.0f, lineTop + 64.0f));
+                const float eventsTop = lineTop + 66.0f;
+                for (std::size_t index = 0; index < diag.recentEventCount && index < diag.recentEvents.size(); ++index) {
+                    const int column = static_cast<int>(index % 2);
+                    const int row = static_cast<int>(index / 2);
+                    const float eventLeft = debug.left + 12.0f + column * ((debug.right - debug.left - 30.0f) * 0.5f);
+                    const float eventRight = column == 0 ? debug.left + (debug.right - debug.left) * 0.5f : debug.right - 12.0f;
+                    Text(std::to_wstring(index + 1) + L". " + diag.recentEvents[index], smallFormat, mutedBrush,
+                         D2D1::RectF(eventLeft, eventsTop + row * 12.0f, eventRight, eventsTop + row * 12.0f + 11.0f));
+                }
+            }
+        }
+
         // Panel hit is registered before controls, so controls win reverse hit-test order.
     }
 
@@ -713,6 +773,17 @@ struct MainWindowUi::Impl {
             break;
         case HitKind::ResetOverlayPosition:
             action.kind = ActionKind::ResetOverlayPosition;
+            Emit(action);
+            break;
+        case HitKind::ToggleOverlayDebug:
+            overlayDebugOpen = !overlayDebugOpen;
+            break;
+        case HitKind::RefreshOverlayDiagnostics:
+            action.kind = ActionKind::RefreshOverlayDiagnostics;
+            Emit(action);
+            break;
+        case HitKind::ClearOverlayDiagnostics:
+            action.kind = ActionKind::ClearOverlayDiagnostics;
             Emit(action);
             break;
         case HitKind::SoundEnabled:

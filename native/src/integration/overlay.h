@@ -17,6 +17,7 @@ struct OverlayDiagnostics {
     bool created{false};
     bool renderSucceeded{false};
     bool showSucceeded{false};
+    bool updateLayeredWindowSucceeded{false};
     bool visible{false};
     bool positioning{false};
     ui::OverlayMode mode{ui::OverlayMode::Overview};
@@ -29,6 +30,12 @@ struct OverlayDiagnostics {
     std::uint64_t lastNonZeroColorPixels{0};
     std::uint8_t lastMaxAlpha{0};
     bool lastFrameHadAlpha{false};
+    bool gatePanicStop{false};
+    bool gateOverlayEnabled{false};
+    bool gateSettingsEnabled{false};
+    bool gateOverviewRows{false};
+    bool gateToastMode{false};
+    bool gateReminderActive{false};
     std::array<std::wstring, 8> recentEvents{};
     std::size_t recentEventCount{0};
 };
@@ -52,12 +59,13 @@ public:
     void Hide();
     void Destroy();
     OverlayDiagnostics GetDiagnostics() const;
+    void ClearDiagnostics();
 
 private:
     static LRESULT CALLBACK WindowProc(HWND, UINT, WPARAM, LPARAM);
     LRESULT HandleMessage(UINT, WPARAM, LPARAM);
     bool Render(const ui::UiState&, const domain::Settings&, const domain::Schedule&, std::int64_t);
-    void SetClickThrough(bool enabled);
+    bool SetClickThrough(bool enabled);
     void ClampPosition();
     void LoadPosition();
     void SavePosition() const;

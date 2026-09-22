@@ -126,36 +126,49 @@ void OverlayWindow::ShowPreviewToast(const std::wstring& title, const std::wstri
     ShowToast(title, body, {}, 8000);
 }
 
-void OverlayWindow::SetClickThrough(bool enabled) {
-    if (!window_) return;
+bool OverlayWindow::SetClickThrough(bool enabled) {
+    if (!window_) return false;
     SetLastError(ERROR_SUCCESS);
     const auto previous = GetWindowLongPtrW(window_, GWL_EXSTYLE);
     if (previous == 0 && GetLastError() != ERROR_SUCCESS) {
         RecordError(L"GetWindowLongPtrW");
-        return;
+        return false;
     }
     const auto next = enabled ? previous | WS_EX_TRANSPARENT
                               : previous & ~static_cast<LONG_PTR>(WS_EX_TRANSPARENT);
     SetLastError(ERROR_SUCCESS);
     if (SetWindowLongPtrW(window_, GWL_EXSTYLE, next) == 0 && GetLastError() != ERROR_SUCCESS) {
         RecordError(L"SetWindowLongPtrW");
-        return;
+        return false;
     }
     // Do not show here. A layered window may only become visible after a good frame.
     if (!SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_,
                       SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_NOZORDER)) {
         RecordError(L"SetWindowPos(click-through)");
+        return false;
     }
+    return true;
 }
 
 void OverlayWindow::BeginMove() {
     if (!window_) return;
-    positioning_ = true;
     dragging_ = false;
+    if (!SetClickThrough(false)) {
+        positioning_ = false;
+        positioningUntil_ = 0;
+        RecordEvent(L"positioning unavailable");
+        return;
+    }
+    positioning_ = true;
     positioningUntil_ = GetTickCount64() + 15'000;
-    SetClickThrough(false);
     SetForegroundWindow(window_);
-    SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE);
+    if (!SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE)) {
+        RecordError(L"SetWindowPos(positioning)");
+        positioning_ = false;
+        positioningUntil_ = 0;
+        SetClickThrough(true);
+        return;
+    }
     RecordEvent(L"positioning started");
     RefreshDiagnosticsBounds();
 }
@@ -207,8 +220,6 @@ void OverlayWindow::SavePosition() const {
 
 void OverlayWindow::Update(const ui::UiState& state, const domain::Settings& settings,
                            const domain::Schedule& schedule, std::int64_t nowMs) {
-    if (!window_) return;
-
     if (positioning_ && GetTickCount64() >= positioningUntil_) {
         positioning_ = false;
         dragging_ = false;
@@ -217,17 +228,9 @@ void OverlayWindow::Update(const ui::UiState& state, const domain::Settings& set
         RecordEvent(L"positioning timeout");
     }
 
-    diagnostics_.mode = state.overlayMode;
-    diagnostics_.positioning = positioning_;
-    if (state.panicStop || !state.overlayEnabled || !settings.overlayWindowEnabled) {
-        Hide();
-        return;
-    }
-
     const auto tick = GetTickCount64();
     const bool reminderActive = reminderUntil_ > tick;
     const bool toastMode = state.overlayMode == ui::OverlayMode::Toast;
-    const bool toast = toastMode || reminderActive;
     const bool hasOverviewRows = std::any_of(
         state.overlayCategories.begin(), state.overlayCategories.end(),
         [&state, index = std::size_t{0}](bool enabled) mutable {
@@ -235,6 +238,23 @@ void OverlayWindow::Update(const ui::UiState& state, const domain::Settings& set
             ++index;
             return visible;
         });
+
+    diagnostics_.mode = state.overlayMode;
+    diagnostics_.positioning = positioning_;
+    diagnostics_.gatePanicStop = state.panicStop;
+    diagnostics_.gateOverlayEnabled = state.overlayEnabled;
+    diagnostics_.gateSettingsEnabled = settings.overlayWindowEnabled;
+    diagnostics_.gateOverviewRows = hasOverviewRows;
+    diagnostics_.gateToastMode = toastMode;
+    diagnostics_.gateReminderActive = reminderActive;
+    if (!window_) return;
+
+    if (state.panicStop || !state.overlayEnabled || !settings.overlayWindowEnabled) {
+        Hide();
+        return;
+    }
+
+    const bool toast = toastMode || reminderActive;
 
     // Idle toast mode is intentionally hidden. Positioning is the only exception.
     if ((toastMode && !reminderActive && !positioning_) || (!toast && !hasOverviewRows && !positioning_)) {
@@ -250,9 +270,10 @@ void OverlayWindow::Update(const ui::UiState& state, const domain::Settings& set
     for (std::size_t index = 0; index < state.overlayCategories.size(); ++index) {
         if (state.overlayCategories[index] && state.categories[index].enabled) ++visibleRows;
     }
-    const int logicalHeight = toast
+    const int positioningHeight = positioning_ ? 32 : 0;
+    const int logicalHeight = (toast
         ? 84
-        : std::max(1, 8 + visibleRows * 38 + std::max(0, visibleRows - 1) * 5);
+        : std::max(1, 8 + visibleRows * 38 + std::max(0, visibleRows - 1) * 5)) + positioningHeight;
     height_ = std::clamp(static_cast<int>(std::lround(logicalHeight * scaleY)), 52, 720);
     ClampPosition();
     if (!SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE | SWP_NOSENDCHANGING)) {
@@ -357,8 +378,12 @@ bool OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
     target->BeginDraw();
     target->Clear(D2D1::ColorF(0, 0));
     const auto bg = colorFromHex(settings.overlayBgHex);
+    const bool positioning = positioning_;
+    const auto backgroundColor = positioning
+        ? D2D1::ColorF(1.0f - bg[0], 1.0f - bg[1], 1.0f - bg[2], 1.0f)
+        : D2D1::ColorF(bg[0], bg[1], bg[2], static_cast<float>(settings.overlayBgOpacity));
     result = target->CreateSolidColorBrush(
-        D2D1::ColorF(bg[0], bg[1], bg[2], static_cast<float>(settings.overlayBgOpacity)), &background);
+        backgroundColor, &background);
     if (SUCCEEDED(result)) {
         result = target->CreateSolidColorBrush(
             D2D1::ColorF(0.28f, 0.03f, 0.03f, static_cast<float>(settings.overlayLineBgOpacity)), &panel);
@@ -373,6 +398,14 @@ bool OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
     target->FillRoundedRectangle(
         D2D1::RoundedRect(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), 8, 8),
         background);
+    if (positioning) {
+        target->DrawRoundedRectangle(
+            D2D1::RoundedRect(D2D1::RectF(1, 1, width_ - 1.0f, height_ - 1.0f), 8, 8), text, 2.0f);
+        target->FillRoundedRectangle(
+            D2D1::RoundedRect(D2D1::RectF(4, 4, width_ - 4.0f, 29.0f), 6, 6), panel);
+        target->DrawTextW(L"Ziehen zum Verschieben", 21, body,
+                          D2D1::RectF(12, 7, width_ - 12.0f, 26), text);
+    }
 
     const auto tick = GetTickCount64();
     const bool reminderToast = reminderUntil_ > tick;
@@ -387,19 +420,23 @@ bool OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
                   return visible;
               })));
     const float gap = 5.0f;
-    const float row = (height_ - 8.0f - gap * (count - 1)) / count;
+    const float contentTop = positioning ? 34.0f : 4.0f;
+    const float row = (height_ - contentTop - 4.0f - gap * (count - 1)) / count;
     int drawn = 0;
     if (reminderToast) {
         target->FillRoundedRectangle(
-            D2D1::RoundedRect(D2D1::RectF(4, 4, width_ - 4.0f, height_ - 4.0f), 5, 5), panel);
+            D2D1::RoundedRect(D2D1::RectF(4, contentTop, width_ - 4.0f, height_ - 4.0f), 5, 5), panel);
         target->DrawTextW(reminderTitle_.c_str(), static_cast<UINT32>(reminderTitle_.size()), title,
-                          D2D1::RectF(13, 11, width_ - 13.0f, height_ * 0.52f), text);
+                          D2D1::RectF(13, contentTop + 7.0f, width_ - 13.0f, contentTop + row * 0.52f), text);
         target->DrawTextW(reminderBody_.c_str(), static_cast<UINT32>(reminderBody_.size()), body,
-                          D2D1::RectF(13, height_ * 0.52f, width_ - 13.0f, height_ - 11.0f), muted);
-    }
-    if (positioning_) {
-        target->DrawTextW(L"Overlay ziehen", 13, body,
-                          D2D1::RectF(13, 7, width_ - 13.0f, 25), muted);
+                          D2D1::RectF(13, contentTop + row * 0.52f, width_ - 13.0f, height_ - 8.0f), muted);
+    } else if (toast && positioning) {
+        target->FillRoundedRectangle(
+            D2D1::RoundedRect(D2D1::RectF(4, contentTop, width_ - 4.0f, height_ - 4.0f), 5, 5), panel);
+        target->DrawTextW(L"Overlay", 7, title,
+                          D2D1::RectF(13, contentTop + 7.0f, width_ * 0.60f, height_ - 8.0f), text);
+        target->DrawTextW(L"ziehen", 6, title,
+                          D2D1::RectF(width_ * 0.60f, contentTop + 7.0f, width_ - 13.0f, height_ - 8.0f), text);
     }
     for (int i = 0; !toast && i < 3 && drawn < count; ++i) {
         if (!state.overlayCategories[static_cast<std::size_t>(i)] ||
@@ -407,7 +444,7 @@ bool OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
             continue;
         }
         const auto& category = state.categories[static_cast<std::size_t>(i)];
-        const float y = 4.0f + drawn * (row + gap);
+        const float y = contentTop + drawn * (row + gap);
         target->FillRoundedRectangle(
             D2D1::RoundedRect(D2D1::RectF(4, y, width_ - 4.0f, y + row), 5, 5), panel);
         const auto titleRect = D2D1::RectF(13, y + 5, width_ * 0.54f, y + 28);
@@ -471,10 +508,12 @@ bool OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
         POINT topLeft{position_.x, position_.y};
         SIZE size{width_, height_};
         BLENDFUNCTION blend{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        diagnostics_.updateLayeredWindowSucceeded = false;
         if (!UpdateLayeredWindow(window_, nullptr, &topLeft, &size, dc, nullptr, 0, &blend, ULW_ALPHA)) {
             RecordError(L"UpdateLayeredWindow");
             break;
         }
+        diagnostics_.updateLayeredWindowSucceeded = true;
     }
     rendered = true;
     diagnostics_.renderSucceeded = true;
@@ -503,6 +542,7 @@ bool OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
 
 void OverlayWindow::RecordEvent(const wchar_t* event) {
     if (!event) return;
+    if (diagnostics_.recentEventCount > 0 && diagnostics_.recentEvents[diagnostics_.recentEventCount - 1] == event) return;
     if (diagnostics_.recentEventCount < diagnostics_.recentEvents.size()) {
         diagnostics_.recentEvents[diagnostics_.recentEventCount++] = event;
     } else {
@@ -550,6 +590,15 @@ OverlayDiagnostics OverlayWindow::GetDiagnostics() const {
     return result;
 }
 
+void OverlayWindow::ClearDiagnostics() {
+    diagnostics_.recentEvents = {};
+    diagnostics_.recentEventCount = 0;
+    diagnostics_.lastError.clear();
+    diagnostics_.lastHresult = S_OK;
+    diagnostics_.lastWin32Error = ERROR_SUCCESS;
+    RefreshDiagnosticsBounds();
+}
+
 LRESULT CALLBACK OverlayWindow::WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
     auto* self = reinterpret_cast<OverlayWindow*>(GetWindowLongPtrW(window, GWLP_USERDATA));
     if (message == WM_NCCREATE) {
@@ -571,7 +620,7 @@ LRESULT OverlayWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
             POINT cursor{};
             GetCursorPos(&cursor);
             dragOffset_ = {cursor.x - position_.x, cursor.y - position_.y};
-            if (!SetCapture(window_)) RecordError(L"SetCapture");
+            SetCapture(window_);
         }
         return 0;
     case WM_MOUSEMOVE:
