@@ -5,6 +5,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <shellapi.h>
+#include <dwmapi.h>
 
 #include <algorithm>
 #include <array>
@@ -17,7 +18,7 @@ namespace helltime::integration {
 namespace {
 
 constexpr wchar_t kClassName[] = L"HelltimeNativeMainWindow";
-constexpr wchar_t kTitle[] = L"Helltime";
+constexpr wchar_t kTitle[] = L"helltime";
 constexpr UINT kTrayMessage = WM_APP + 1;
 constexpr UINT kTimerId = 1;
 constexpr UINT kTrayShow = 1001;
@@ -76,6 +77,7 @@ NativeApp::~NativeApp() {
 }
 
 int NativeApp::Run() {
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     WNDCLASSEXW klass{sizeof(klass)};
     klass.hInstance = instance_;
@@ -86,8 +88,13 @@ int NativeApp::Run() {
     klass.style = CS_HREDRAW | CS_VREDRAW;
     RegisterClassExW(&klass);
     window_ = CreateWindowExW(0, kClassName, kTitle, WS_OVERLAPPEDWINDOW,
-                              CW_USEDEFAULT, CW_USEDEFAULT, 980, 660, nullptr, nullptr, instance_, this);
+                               CW_USEDEFAULT, CW_USEDEFAULT, 980, 660, nullptr, nullptr, instance_, this);
     if (!window_) { CoUninitialize(); return 1; }
+    const BOOL dark = TRUE;
+    // Windows 10 uses 20 on current builds; 19 keeps older supported builds dark too.
+    if (FAILED(DwmSetWindowAttribute(window_, 20, &dark, sizeof(dark)))) {
+        DwmSetWindowAttribute(window_, 19, &dark, sizeof(dark));
+    }
     if (FAILED(ui_.Initialize(window_))) { DestroyWindow(window_); CoUninitialize(); return 1; }
     settings_ = domain::loadSettings();
     overlay_.Create(instance_);
@@ -304,8 +311,15 @@ LRESULT NativeApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     case WM_PAINT: { PAINTSTRUCT paint{}; BeginPaint(window_, &paint); ui_.Render(); EndPaint(window_, &paint); return 0; }
     case WM_ERASEBKGND: return 1;
     case WM_SIZE: ui_.HandleMessage(message, wParam, lParam); return 0;
-    case WM_DISPLAYCHANGE:
-    case WM_DPICHANGED: ui_.HandleMessage(message, wParam, lParam); return 0;
+    case WM_DISPLAYCHANGE: ui_.HandleMessage(message, wParam, lParam); return 0;
+    case WM_DPICHANGED: {
+        const auto* suggested = reinterpret_cast<const RECT*>(lParam);
+        SetWindowPos(window_, nullptr, suggested->left, suggested->top,
+                     suggested->right - suggested->left, suggested->bottom - suggested->top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+        ui_.HandleMessage(message, wParam, lParam);
+        return 0;
+    }
     case WM_LBUTTONDOWN:
     case WM_LBUTTONUP:
     case WM_MOUSEMOVE:

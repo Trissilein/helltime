@@ -24,7 +24,7 @@ target_compile_definitions(helltime PRIVATE
 )
 target_link_libraries(helltime PRIVATE
     d2d1 dwrite windowscodecs
-    ole32 uuid sapi winmm shell32 user32 gdi32 comctl32
+    ole32 uuid sapi winmm shell32 user32 gdi32 comctl32 dwmapi
 )
 
 if(MSVC)
@@ -32,7 +32,7 @@ if(MSVC)
     set_property(TARGET helltime PROPERTY
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
     )
-    target_compile_options(helltime PRIVATE /W4 /permissive-)
+    target_compile_options(helltime PRIVATE /W4 /permissive- /utf-8)
     target_link_options(helltime PRIVATE
         $<$<CONFIG:Release>:/LTCG>
         $<$<CONFIG:Release>:/OPT:REF>
@@ -64,6 +64,6 @@ if(MSVC)
     set_property(TARGET helltime_domain_tests PROPERTY
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
     )
-    target_compile_options(helltime_domain_tests PRIVATE /W4 /permissive-)
+    target_compile_options(helltime_domain_tests PRIVATE /W4 /permissive- /utf-8)
 endif()
 add_test(NAME helltime_domain_tests COMMAND helltime_domain_tests)
