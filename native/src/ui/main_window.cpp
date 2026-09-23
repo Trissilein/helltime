@@ -1,4 +1,5 @@
 #include "main_window.h"
+#include "design_tokens.h"
 
 #include <algorithm>
 #include <array>
@@ -19,20 +20,6 @@ void Release(T*& value) noexcept {
     }
 }
 
-constexpr D2D1_COLOR_F kBackground{0.043f, 0.043f, 0.043f, 1.0f};
-constexpr D2D1_COLOR_F kBackgroundTop{0.075f, 0.025f, 0.025f, 0.30f};
-constexpr D2D1_COLOR_F kPanel{0.04f, 0.04f, 0.04f, 0.96f};
-constexpr D2D1_COLOR_F kPanelRaised{0.08f, 0.08f, 0.08f, 0.98f};
-constexpr D2D1_COLOR_F kGold{0.831f, 0.686f, 0.216f, 1.0f};
-constexpr D2D1_COLOR_F kGoldDim{0.627f, 0.518f, 0.157f, 1.0f};
-constexpr D2D1_COLOR_F kText{1.0f, 1.0f, 1.0f, 0.96f};
-constexpr D2D1_COLOR_F kTextSecondary{1.0f, 1.0f, 1.0f, 0.78f};
-constexpr D2D1_COLOR_F kMuted{1.0f, 1.0f, 1.0f, 0.56f};
-constexpr D2D1_COLOR_F kBorder{0.47f, 0.47f, 0.47f, 0.36f};
-constexpr D2D1_COLOR_F kHelltide{0.60f, 0.122f, 0.122f, 1.0f};
-constexpr D2D1_COLOR_F kLegion{0.702f, 0.141f, 0.141f, 1.0f};
-constexpr D2D1_COLOR_F kWorldBoss{0.478f, 0.086f, 0.086f, 1.0f};
-
 int IndexOf(Category category) noexcept {
     return static_cast<int>(category);
 }
@@ -42,9 +29,9 @@ Category CategoryAt(int index) noexcept {
 }
 
 D2D1_COLOR_F CategoryColor(Category category, float alpha = 1.0f) noexcept {
-    D2D1_COLOR_F color = kHelltide;
-    if (category == Category::Legion) color = kLegion;
-    if (category == Category::WorldBoss) color = kWorldBoss;
+    D2D1_COLOR_F color = design::Helltide;
+    if (category == Category::Legion) color = design::Legion;
+    if (category == Category::WorldBoss) color = design::WorldBoss;
     color.a = alpha;
     return color;
 }
@@ -154,9 +141,10 @@ struct MainWindowUi::Impl {
         if (callbacks.onAction) callbacks.onAction(action);
     }
 
-    HRESULT CreateTextFormat(float size, DWRITE_FONT_WEIGHT weight, IDWriteTextFormat** result) {
+    HRESULT CreateTextFormat(float size, DWRITE_FONT_WEIGHT weight, IDWriteTextFormat** result,
+                             const wchar_t* family = design::FontUi) {
         HRESULT hr = writeFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, weight, DWRITE_FONT_STYLE_NORMAL,
+            family, nullptr, weight, DWRITE_FONT_STYLE_NORMAL,
             DWRITE_FONT_STRETCH_NORMAL, size, L"", result);
         if (SUCCEEDED(hr)) {
             (*result)->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
@@ -172,17 +160,18 @@ struct MainWindowUi::Impl {
             DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory),
             reinterpret_cast<IUnknown**>(&writeFactory));
         if (FAILED(hr)) return hr;
-        hr = CreateTextFormat(18.0f, DWRITE_FONT_WEIGHT_EXTRA_BOLD, &titleFormat);
+        hr = CreateTextFormat(design::Text18, DWRITE_FONT_WEIGHT_EXTRA_BOLD, &titleFormat);
         if (FAILED(hr)) return hr;
-        hr = CreateTextFormat(13.0f, DWRITE_FONT_WEIGHT_EXTRA_BOLD, &headingFormat);
+        hr = CreateTextFormat(design::Text13, DWRITE_FONT_WEIGHT_EXTRA_BOLD, &headingFormat);
         if (FAILED(hr)) return hr;
-        hr = CreateTextFormat(12.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD, &bodyFormat);
+        hr = CreateTextFormat(design::Text12, DWRITE_FONT_WEIGHT_SEMI_BOLD, &bodyFormat);
         if (FAILED(hr)) return hr;
-        hr = CreateTextFormat(10.0f, DWRITE_FONT_WEIGHT_NORMAL, &smallFormat);
+        hr = CreateTextFormat(design::Text11, DWRITE_FONT_WEIGHT_NORMAL, &smallFormat);
         if (FAILED(hr)) return hr;
-        hr = CreateTextFormat(20.0f, DWRITE_FONT_WEIGHT_BLACK, &countdownFormat);
+        hr = CreateTextFormat(design::CardCountdown, DWRITE_FONT_WEIGHT_BLACK, &countdownFormat,
+                              design::FontMono);
         if (FAILED(hr)) return hr;
-        return CreateTextFormat(11.0f, DWRITE_FONT_WEIGHT_BOLD, &buttonFormat);
+        return CreateTextFormat(design::Text11, DWRITE_FONT_WEIGHT_BOLD, &buttonFormat);
     }
 
     void DiscardDeviceResources() noexcept {
@@ -209,13 +198,13 @@ struct MainWindowUi::Impl {
             D2D1::HwndRenderTargetProperties(window, D2D1::SizeU(width, height)),
             &renderTarget);
         if (FAILED(hr)) return hr;
-        hr = renderTarget->CreateSolidColorBrush(kPanel, &brush);
-        if (SUCCEEDED(hr)) hr = renderTarget->CreateSolidColorBrush(kText, &textBrush);
-        if (SUCCEEDED(hr)) hr = renderTarget->CreateSolidColorBrush(kTextSecondary, &secondaryBrush);
-        if (SUCCEEDED(hr)) hr = renderTarget->CreateSolidColorBrush(kMuted, &mutedBrush);
-        if (SUCCEEDED(hr)) hr = renderTarget->CreateSolidColorBrush(kBorder, &borderBrush);
-        if (SUCCEEDED(hr)) hr = renderTarget->CreateSolidColorBrush(kGold, &goldBrush);
-        if (SUCCEEDED(hr)) hr = renderTarget->CreateSolidColorBrush(kGold, &redBrush);
+        hr = renderTarget->CreateSolidColorBrush(design::Panel, &brush);
+        if (SUCCEEDED(hr)) hr = renderTarget->CreateSolidColorBrush(design::TextPrimary, &textBrush);
+        if (SUCCEEDED(hr)) hr = renderTarget->CreateSolidColorBrush(design::TextSecondary, &secondaryBrush);
+        if (SUCCEEDED(hr)) hr = renderTarget->CreateSolidColorBrush(design::TextMuted, &mutedBrush);
+        if (SUCCEEDED(hr)) hr = renderTarget->CreateSolidColorBrush(design::Border, &borderBrush);
+        if (SUCCEEDED(hr)) hr = renderTarget->CreateSolidColorBrush(design::Gold, &goldBrush);
+        if (SUCCEEDED(hr)) hr = renderTarget->CreateSolidColorBrush(design::Gold, &redBrush);
         if (FAILED(hr)) DiscardDeviceResources();
         return hr;
     }
@@ -269,16 +258,16 @@ struct MainWindowUi::Impl {
                                      : D2D1::ColorF(0.20f, 0.20f, 0.20f, 1.0f));
         renderTarget->DrawLine(D2D1::Point2F(left, center), D2D1::Point2F(right, center), borderBrush, 3.0f);
         const float knob = left + (right - left) * Clamp01(value);
-        SetBrush(goldBrush, enabled ? kGold : kGoldDim);
+        SetBrush(goldBrush, enabled ? design::Gold : design::GoldDim);
         renderTarget->DrawLine(D2D1::Point2F(left, center), D2D1::Point2F(knob, center), goldBrush, 3.0f);
         renderTarget->FillEllipse(D2D1::Ellipse(D2D1::Point2F(knob, center), 5.0f, 5.0f), goldBrush);
     }
 
     void DrawToggle(D2D1_RECT_F rect, bool checked, bool enabled = true) {
-        const auto fill = checked ? (enabled ? kGold : kGoldDim)
+        const auto fill = checked ? (enabled ? design::Gold : design::GoldDim)
                                   : D2D1::ColorF(0.15f, 0.15f, 0.15f, enabled ? 1.0f : 0.65f);
         FillRounded(rect, 7.0f, fill);
-        StrokeRounded(rect, 7.0f, enabled ? kBorder : D2D1::ColorF(0.3f, 0.3f, 0.3f, 0.25f));
+        StrokeRounded(rect, design::Radius6, enabled ? design::Border : design::BorderSubtle);
         const float x = checked ? rect.right - 8.0f : rect.left + 8.0f;
         SetBrush(secondaryBrush, checked ? D2D1::ColorF(0.1f, 0.07f, 0.02f, 1.0f)
                                          : D2D1::ColorF(0.70f, 0.70f, 0.70f, enabled ? 1.0f : 0.65f));
@@ -287,18 +276,18 @@ struct MainWindowUi::Impl {
 
     void DrawCheckbox(float x, float y, bool checked, bool enabled = true) {
         const D2D1_RECT_F box = D2D1::RectF(x, y, x + 14.0f, y + 14.0f);
-        FillRounded(box, 3.0f, checked ? (enabled ? kGold : kGoldDim)
+        FillRounded(box, 3.0f, checked ? (enabled ? design::Gold : design::GoldDim)
                                         : D2D1::ColorF(0.08f, 0.08f, 0.08f, enabled ? 1.0f : 0.6f));
-        StrokeRounded(box, 3.0f, enabled ? kBorder : D2D1::ColorF(0.3f, 0.3f, 0.3f, 0.25f));
+        StrokeRounded(box, 3.0f, enabled ? design::Border : design::BorderSubtle);
         if (checked) {
             Text(L"+", buttonFormat, secondaryBrush, box, DWRITE_TEXT_ALIGNMENT_CENTER);
         }
     }
 
     void DrawButton(const D2D1_RECT_F& rect, std::wstring_view label, bool primary = false) {
-        FillRounded(rect, 5.0f, primary ? D2D1::ColorF(kGold.r, kGold.g, kGold.b, 0.24f)
+        FillRounded(rect, 5.0f, primary ? design::WithAlpha(design::Gold, 0.24f)
                                        : D2D1::ColorF(0.10f, 0.10f, 0.10f, 0.96f));
-        StrokeRounded(rect, 5.0f, primary ? kGold : kBorder);
+        StrokeRounded(rect, 5.0f, primary ? design::Gold : design::Border);
         Text(label, buttonFormat, primary ? textBrush : secondaryBrush, rect, DWRITE_TEXT_ALIGNMENT_CENTER);
     }
 
@@ -308,7 +297,7 @@ struct MainWindowUi::Impl {
         const std::array<const wchar_t*, 3> defaults{L"Helltide", L"Legion", L"World Boss"};
         const std::wstring_view title = categoryView.title.empty() ? defaults[static_cast<std::size_t>(IndexOf(category))]
                                                                     : std::wstring_view(categoryView.title);
-        FillRounded(card, 8.0f, categoryView.enabled ? kPanel : D2D1::ColorF(0.03f, 0.03f, 0.03f, 0.86f));
+        FillRounded(card, 8.0f, categoryView.enabled ? design::Panel : D2D1::ColorF(0.03f, 0.03f, 0.03f, 0.86f));
         StrokeRounded(card, 8.0f, D2D1::ColorF(accent.r, accent.g, accent.b, categoryView.enabled ? 0.42f : 0.18f));
         FillRounded(D2D1::RectF(card.left, card.top, card.left + 4.0f, card.bottom), 2.0f,
                     D2D1::ColorF(accent.r, accent.g, accent.b, categoryView.enabled ? 0.94f : 0.38f));
@@ -406,7 +395,7 @@ struct MainWindowUi::Impl {
         if (footerBottom > footerTop) {
             FillRounded(D2D1::RectF(contentLeft, footerTop, contentLeft + contentWidth, footerBottom), 7.0f,
                         D2D1::ColorF(0.08f, 0.08f, 0.08f, 0.94f));
-            StrokeRounded(D2D1::RectF(contentLeft, footerTop, contentLeft + contentWidth, footerBottom), 7.0f, kBorder);
+            StrokeRounded(D2D1::RectF(contentLeft, footerTop, contentLeft + contentWidth, footerBottom), 7.0f, design::Border);
             Text(L"Overlay", smallFormat, mutedBrush,
                  D2D1::RectF(contentLeft + 12.0f, footerTop, contentLeft + 62.0f, footerBottom));
             const D2D1_RECT_F overlayToggle = D2D1::RectF(contentLeft + 68.0f, footerTop + 11.0f, contentLeft + 94.0f, footerTop + 25.0f);
@@ -421,9 +410,9 @@ struct MainWindowUi::Impl {
     }
 
     void DrawHeader(float width) {
-        FillRect(D2D1::RectF(0.0f, 0.0f, width, 3.0f), kGold);
+        FillRect(D2D1::RectF(0.0f, 0.0f, width, 3.0f), design::Gold);
         Text(L"hell", titleFormat, textBrush, D2D1::RectF(14.0f, 8.0f, 54.0f, 34.0f));
-        SetBrush(redBrush, kLegion);
+        SetBrush(redBrush, design::Legion);
         Text(L"time", titleFormat, redBrush, D2D1::RectF(51.0f, 8.0f, 94.0f, 34.0f));
         Text(L"Event Timers", smallFormat, mutedBrush, D2D1::RectF(15.0f, 35.0f, 130.0f, 54.0f));
         const D2D1_RECT_F settings = D2D1::RectF(width - 60.0f, 10.0f, width - 14.0f, 42.0f);
@@ -433,7 +422,7 @@ struct MainWindowUi::Impl {
 
     void DrawModalSection(const D2D1_RECT_F& section) {
         FillRounded(section, 7.0f, D2D1::ColorF(0.04f, 0.04f, 0.04f, 0.96f));
-        StrokeRounded(section, 7.0f, kBorder);
+        StrokeRounded(section, 7.0f, design::Border);
     }
 
     void DrawModal(float width, float height) {
@@ -444,7 +433,7 @@ struct MainWindowUi::Impl {
         const float bottom = std::max(top + 260.0f, std::min(height - 10.0f, top + 640.0f));
         const D2D1_RECT_F modal = D2D1::RectF(left, top, left + modalWidth, bottom);
         FillRounded(modal, 10.0f, D2D1::ColorF(0.015f, 0.015f, 0.015f, 0.99f));
-        StrokeRounded(modal, 10.0f, kGold);
+        StrokeRounded(modal, 10.0f, design::Gold);
         AddHit(modal, HitKind::ModalPanel);
         Text(L"Einstellungen", headingFormat, textBrush,
              D2D1::RectF(left + 14.0f, top + 8.0f, modal.right - 56.0f, top + 38.0f));
@@ -600,8 +589,8 @@ struct MainWindowUi::Impl {
         const float width = static_cast<float>(std::max<LONG>(1, client.right - client.left));
         const float height = static_cast<float>(std::max<LONG>(1, client.bottom - client.top));
         renderTarget->BeginDraw();
-        renderTarget->Clear(kBackground);
-        FillRect(D2D1::RectF(0.0f, 0.0f, width, std::min(height, 170.0f)), kBackgroundTop);
+        renderTarget->Clear(design::Background);
+        FillRect(D2D1::RectF(0.0f, 0.0f, width, std::min(height, 170.0f)), design::WithAlpha(design::BurgundyBright, 0.30f));
         hits.clear();
         if (settingsOpen) {
             DrawModal(width, height);
@@ -611,7 +600,7 @@ struct MainWindowUi::Impl {
             if (state.panicStop) {
                 const D2D1_RECT_F warning = D2D1::RectF(12.0f, std::min(height - 38.0f, 60.0f), width - 72.0f, std::min(height - 10.0f, 86.0f));
                 FillRounded(warning, 6.0f, D2D1::ColorF(0.20f, 0.08f, 0.03f, 0.94f));
-                StrokeRounded(warning, 6.0f, kGoldDim);
+                StrokeRounded(warning, 6.0f, design::GoldDim);
                 Text(L"Sicherheits-Stopp aktiv", smallFormat, textBrush, D2D1::RectF(warning.left + 10.0f, warning.top + 2.0f, warning.right, warning.bottom - 2.0f));
                 const D2D1_RECT_F reset = D2D1::RectF(width - 58.0f, warning.top + 3.0f, width - 12.0f, warning.bottom - 3.0f);
                 DrawButton(reset, L"Reset", true);

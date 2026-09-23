@@ -1,4 +1,5 @@
 #include "overlay.h"
+#include "../ui/design_tokens.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -41,7 +42,8 @@ std::array<float, 4> colorFromHex(const std::string& hex) {
                 (value & 255) / 255.0f,
                 1.0f};
     }
-    return {0.043f, 0.071f, 0.125f, 1.0f};
+    const auto fallback = ui::design::Background;
+    return {fallback.r, fallback.g, fallback.b, fallback.a};
 }
 
 } // namespace
@@ -332,13 +334,13 @@ bool OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
         RecordError(L"D2D DC target", result);
         break;
     }
-    result = write->CreateTextFormat(L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD,
+    result = write->CreateTextFormat(ui::design::FontUi, nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD,
                                      DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
-                                     16.0f, L"", &title);
+                                     ui::design::Text16, L"", &title);
     if (SUCCEEDED(result)) {
-        result = write->CreateTextFormat(L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL,
+        result = write->CreateTextFormat(ui::design::FontUi, nullptr, DWRITE_FONT_WEIGHT_NORMAL,
                                          DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
-                                         12.0f, L"", &body);
+                                         ui::design::Text12, L"", &body);
     }
     if (FAILED(result)) {
         RecordError(L"text format", result);
@@ -388,21 +390,21 @@ bool OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
         result = target->CreateSolidColorBrush(
             D2D1::ColorF(0.28f, 0.03f, 0.03f, static_cast<float>(settings.overlayLineBgOpacity)), &panel);
     }
-    if (SUCCEEDED(result)) result = target->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1, 0.96f), &text);
-    if (SUCCEEDED(result)) result = target->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1, 0.62f), &muted);
+    if (SUCCEEDED(result)) result = target->CreateSolidColorBrush(ui::design::TextPrimary, &text);
+    if (SUCCEEDED(result)) result = target->CreateSolidColorBrush(ui::design::TextMuted, &muted);
     if (FAILED(result)) {
         RecordError(L"brush", result);
         break;
     }
 
     target->FillRoundedRectangle(
-        D2D1::RoundedRect(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), 8, 8),
+        D2D1::RoundedRect(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), ui::design::Radius8, ui::design::Radius8),
         background);
     if (positioning) {
         target->DrawRoundedRectangle(
-            D2D1::RoundedRect(D2D1::RectF(1, 1, width_ - 1.0f, height_ - 1.0f), 8, 8), text, 2.0f);
+            D2D1::RoundedRect(D2D1::RectF(1, 1, width_ - 1.0f, height_ - 1.0f), ui::design::Radius8, ui::design::Radius8), text, ui::design::Space2);
         target->FillRoundedRectangle(
-            D2D1::RoundedRect(D2D1::RectF(4, 4, width_ - 4.0f, 29.0f), 6, 6), panel);
+            D2D1::RoundedRect(D2D1::RectF(4, 4, width_ - 4.0f, 29.0f), ui::design::Radius6, ui::design::Radius6), panel);
         target->DrawTextW(L"Ziehen zum Verschieben", 21, body,
                           D2D1::RectF(12, 7, width_ - 12.0f, 26), text);
     }
@@ -425,14 +427,14 @@ bool OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
     int drawn = 0;
     if (reminderToast) {
         target->FillRoundedRectangle(
-            D2D1::RoundedRect(D2D1::RectF(4, contentTop, width_ - 4.0f, height_ - 4.0f), 5, 5), panel);
+            D2D1::RoundedRect(D2D1::RectF(4, contentTop, width_ - 4.0f, height_ - 4.0f), ui::design::Radius4, ui::design::Radius4), panel);
         target->DrawTextW(reminderTitle_.c_str(), static_cast<UINT32>(reminderTitle_.size()), title,
                           D2D1::RectF(13, contentTop + 7.0f, width_ - 13.0f, contentTop + row * 0.52f), text);
         target->DrawTextW(reminderBody_.c_str(), static_cast<UINT32>(reminderBody_.size()), body,
                           D2D1::RectF(13, contentTop + row * 0.52f, width_ - 13.0f, height_ - 8.0f), muted);
     } else if (toast && positioning) {
         target->FillRoundedRectangle(
-            D2D1::RoundedRect(D2D1::RectF(4, contentTop, width_ - 4.0f, height_ - 4.0f), 5, 5), panel);
+            D2D1::RoundedRect(D2D1::RectF(4, contentTop, width_ - 4.0f, height_ - 4.0f), ui::design::Radius4, ui::design::Radius4), panel);
         target->DrawTextW(L"Overlay", 7, title,
                           D2D1::RectF(13, contentTop + 7.0f, width_ * 0.60f, height_ - 8.0f), text);
         target->DrawTextW(L"ziehen", 6, title,
@@ -446,7 +448,7 @@ bool OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
         const auto& category = state.categories[static_cast<std::size_t>(i)];
         const float y = contentTop + drawn * (row + gap);
         target->FillRoundedRectangle(
-            D2D1::RoundedRect(D2D1::RectF(4, y, width_ - 4.0f, y + row), 5, 5), panel);
+            D2D1::RoundedRect(D2D1::RectF(4, y, width_ - 4.0f, y + row), ui::design::Radius4, ui::design::Radius4), panel);
         const auto titleRect = D2D1::RectF(13, y + 5, width_ * 0.54f, y + 28);
         target->DrawTextW(category.title.c_str(), static_cast<UINT32>(category.title.size()), title,
                           titleRect, text);
