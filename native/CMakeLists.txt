@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.25)
 project(helltime_native VERSION 0.1.0 LANGUAGES CXX)
 
 add_executable(helltime WIN32
+    helltime.rc
     src/main.cpp
     src/domain/safety.cpp
     src/domain/schedule.cpp
