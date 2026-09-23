@@ -20,6 +20,7 @@ namespace {
 
 constexpr wchar_t kClassName[] = L"HelltimeNativeMainWindow";
 constexpr wchar_t kTitle[] = L"helltime";
+constexpr WORD kHelltimeIconResourceId = 101;
 constexpr UINT kTrayMessage = WM_APP + 1;
 constexpr UINT kTimerId = 1;
 constexpr UINT kInitialResizeTimerId = 2;
@@ -118,6 +119,11 @@ int NativeApp::Run() {
     klass.lpfnWndProc = WindowProc;
     klass.lpszClassName = kClassName;
     klass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    // Use the embedded Tauri icon for both shell/window sizes. Keep the handles
+    // owned by the class for the lifetime of this process (LoadIcon returns a
+    // shared module-resource handle).
+    klass.hIcon = LoadIconW(instance_, MAKEINTRESOURCEW(kHelltimeIconResourceId));
+    klass.hIconSm = LoadIconW(instance_, MAKEINTRESOURCEW(kHelltimeIconResourceId));
     klass.hbrBackground = nullptr;
     klass.style = CS_HREDRAW | CS_VREDRAW;
     RegisterClassExW(&klass);
@@ -350,7 +356,8 @@ void NativeApp::ApplyAction(const ui::UiAction& action) {
 void NativeApp::CreateTray() {
     tray_.cbSize = sizeof(tray_); tray_.hWnd = window_; tray_.uID = 1;
     tray_.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP; tray_.uCallbackMessage = kTrayMessage;
-    tray_.hIcon = LoadIconW(nullptr, IDI_APPLICATION); wcscpy_s(tray_.szTip, L"Helltime");
+    tray_.hIcon = LoadIconW(instance_, MAKEINTRESOURCEW(kHelltimeIconResourceId));
+    wcscpy_s(tray_.szTip, L"Helltime");
     Shell_NotifyIconW(NIM_ADD, &tray_);
 }
 
