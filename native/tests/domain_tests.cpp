@@ -1,4 +1,5 @@
 #include "../src/domain/safety.h"
+#include "../src/domain/fired_state.h"
 #include "../src/domain/schedule.h"
 #include "../src/domain/settings.h"
 
@@ -90,6 +91,39 @@ int main() {
     assert(clamped.categories[0].timerCount == 3 && clamped.categories[0].timers[0].minutesBefore == 1);
     assert(clamped.categories[0].timers[0].pitchHz == 2000 && clamped.categories[0].ttsName.size() == 80);
 
+    const auto firedPath = firedStateFilePath();
+    assert(firedPath.find(L"HelltimeNative\\fired.json") != std::wstring::npos);
+    DeleteFileW(firedPath.c_str());
+    FiredState fired;
+    assert(markFiredIfFresh(fired, "legion:123:0", fixtureNow));
+    assert(hasFreshFired(fired, "legion:123:0", fixtureNow + 11 * 60 * 60 * 1000));
+    assert(!markFiredIfFresh(fired, "legion:123:0", fixtureNow + 1'000));
+    assert(markFiredIfFresh(fired, "legion:123:0", fixtureNow + FIRED_STATE_RETENTION_MS + 1));
+    assert(saveFiredState(fired));
+    const auto reloadedFired = loadFiredState();
+    assert(reloadedFired.size() == 1 && reloadedFired.at("legion:123:0") == fixtureNow + FIRED_STATE_RETENTION_MS + 1);
+
+    FiredState pruning{
+        {"old:1:0", fixtureNow - 1},
+        {"new:2:1", fixtureNow + FIRED_STATE_RETENTION_MS},
+        {"future:3:2", fixtureNow + FIRED_STATE_RETENTION_MS + 1},
+    };
+    pruneFiredState(pruning, fixtureNow + FIRED_STATE_RETENTION_MS);
+    assert(pruning.size() == 2 && pruning.contains("new:2:1") && pruning.contains("future:3:2"));
+
+    writeRaw(firedPath, "{\"helltide:7:0\":1789588200000,\"world_boss:8:2\":1789588200123}");
+    const auto parsedFired = loadFiredState();
+    assert(parsedFired.size() == 2 && parsedFired.at("world_boss:8:2") == 1789588200123);
+    writeRaw(firedPath, "{\"broken\":999999999999999999999999}");
+    assert(loadFiredState().empty());
+    writeRaw(firedPath, "{");
+    assert(loadFiredState().empty());
+    writeRaw(firedPath, "");
+    assert(loadFiredState().empty());
+    std::string oversized(64 * 1024 + 1, 'x');
+    writeRaw(firedPath, oversized);
+    assert(loadFiredState().empty());
+
     enablePanicStop();
     const auto panic = loadSettings();
     assert(isPanicStopEnabled() && !panic.overlayWindowEnabled && !panic.soundEnabled && !panic.autoRefreshEnabled);
@@ -97,6 +131,8 @@ int main() {
     assert(!isPanicStopEnabled());
 
     DeleteFileW(path.c_str());
+    DeleteFileW(firedPath.c_str());
+    DeleteFileW((firedPath + L".tmp").c_str());
     RemoveDirectoryW((testLocalAppData + L"\\HelltimeNative").c_str());
     RemoveDirectoryW(testLocalAppData.c_str());
     assert(SetEnvironmentVariableW(L"LOCALAPPDATA", oldLocalAppData.empty() ? nullptr : oldLocalAppData.c_str()) != FALSE);

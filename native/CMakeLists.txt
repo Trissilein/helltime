@@ -8,6 +8,7 @@ add_executable(helltime WIN32
     src/domain/safety.cpp
     src/domain/schedule.cpp
     src/domain/settings.cpp
+    src/domain/fired_state.cpp
     src/ui/main_window.cpp
     src/integration/audio.cpp
     src/integration/overlay.cpp
@@ -54,6 +55,7 @@ add_executable(helltime_domain_tests
     src/domain/safety.cpp
     src/domain/schedule.cpp
     src/domain/settings.cpp
+    src/domain/fired_state.cpp
 )
 target_include_directories(helltime_domain_tests PRIVATE src)
 target_compile_features(helltime_domain_tests PRIVATE cxx_std_20)
@@ -65,6 +67,9 @@ if(MSVC)
     set_property(TARGET helltime_domain_tests PROPERTY
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
     )
-    target_compile_options(helltime_domain_tests PRIVATE /W4 /permissive- /utf-8)
+    # Keep assertions active in every test configuration, including Release.
+    target_compile_options(helltime_domain_tests PRIVATE /W4 /permissive- /utf-8 /UNDEBUG)
+else()
+    target_compile_options(helltime_domain_tests PRIVATE -UNDEBUG)
 endif()
 add_test(NAME helltime_domain_tests COMMAND helltime_domain_tests)
