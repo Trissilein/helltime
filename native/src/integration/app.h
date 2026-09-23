@@ -26,6 +26,7 @@ private:
     LRESULT HandleMessage(UINT, WPARAM, LPARAM);
     void Tick();
     void Refresh(bool preserveUiState);
+    void AdjustMainWindowHeight();
     void ApplyAction(const ui::UiAction&);
     ui::UiState MakeUiState(std::int64_t nowMs) const;
     void CreateTray();
@@ -43,6 +44,8 @@ private:
     domain::Settings settings_{};
     domain::Schedule schedule_{};
     std::optional<std::int64_t> previousNowMs_{};
+    bool initialMainSize_{true};
+    int lastPreferredClientHeight_{-1};
     std::array<bool, 3> trayReminderArchive_{true, true, true};
     ui::MainWindowUi ui_;
     OverlayWindow overlay_;

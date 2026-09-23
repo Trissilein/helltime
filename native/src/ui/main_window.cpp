@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -160,7 +161,7 @@ struct MainWindowUi::Impl {
             DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory),
             reinterpret_cast<IUnknown**>(&writeFactory));
         if (FAILED(hr)) return hr;
-        hr = CreateTextFormat(design::Text18, DWRITE_FONT_WEIGHT_EXTRA_BOLD, &titleFormat);
+        hr = CreateTextFormat(design::Text16, DWRITE_FONT_WEIGHT_EXTRA_BOLD, &titleFormat);
         if (FAILED(hr)) return hr;
         hr = CreateTextFormat(design::Text13, DWRITE_FONT_WEIGHT_EXTRA_BOLD, &headingFormat);
         if (FAILED(hr)) return hr;
@@ -223,9 +224,57 @@ struct MainWindowUi::Impl {
         renderTarget->FillRoundedRectangle(D2D1::RoundedRect(rect, radius, radius), brush);
     }
 
-    void StrokeRounded(const D2D1_RECT_F& rect, float radius, D2D1_COLOR_F color, float width = 1.0f) {
+    void FillRoundedGradient(const D2D1_RECT_F& rect, float radius,
+                             D2D1_COLOR_F top, D2D1_COLOR_F bottom) {
+        D2D1_GRADIENT_STOP stops[]{{0.0f, top}, {1.0f, bottom}};
+        ID2D1GradientStopCollection* collection = nullptr;
+        ID2D1LinearGradientBrush* gradient = nullptr;
+        if (SUCCEEDED(renderTarget->CreateGradientStopCollection(
+                stops, 2, D2D1_GAMMA_2_2, D2D1_EXTEND_MODE_CLAMP, &collection)) &&
+            SUCCEEDED(renderTarget->CreateLinearGradientBrush(
+                D2D1::LinearGradientBrushProperties(
+                    D2D1::Point2F(rect.left, rect.top), D2D1::Point2F(rect.left, rect.bottom)),
+                collection, &gradient))) {
+            renderTarget->FillRoundedRectangle(D2D1::RoundedRect(rect, radius, radius), gradient);
+        } else {
+            FillRounded(rect, radius, bottom);
+        }
+        Release(gradient);
+        Release(collection);
+    }
+
+    void FillRadial(const D2D1_RECT_F& rect, D2D1_POINT_2F center, float radiusX, float radiusY,
+                    D2D1_COLOR_F inner, D2D1_COLOR_F outer, bool rounded = false) {
+        D2D1_GRADIENT_STOP stops[]{{0.0f, inner}, {1.0f, outer}};
+        ID2D1GradientStopCollection* collection = nullptr;
+        ID2D1RadialGradientBrush* gradient = nullptr;
+        if (SUCCEEDED(renderTarget->CreateGradientStopCollection(
+                stops, 2, D2D1_GAMMA_2_2, D2D1_EXTEND_MODE_CLAMP, &collection)) &&
+            SUCCEEDED(renderTarget->CreateRadialGradientBrush(
+                D2D1::RadialGradientBrushProperties(center, D2D1::Point2F(0.0f, 0.0f), radiusX, radiusY),
+                collection, &gradient))) {
+            if (rounded) {
+                renderTarget->FillRoundedRectangle(D2D1::RoundedRect(rect, design::Radius8, design::Radius8), gradient);
+            } else {
+                renderTarget->FillRectangle(rect, gradient);
+            }
+        }
+        Release(gradient);
+        Release(collection);
+    }
+
+    void StrokeRounded(const D2D1_RECT_F& rect, float radius, D2D1_COLOR_F color,
+                       float width = 1.0f, bool dashed = false) {
         SetBrush(borderBrush, color);
-        renderTarget->DrawRoundedRectangle(D2D1::RoundedRect(rect, radius, radius), borderBrush, width);
+        ID2D1StrokeStyle* strokeStyle = nullptr;
+        if (dashed) {
+            D2D1_STROKE_STYLE_PROPERTIES properties{};
+            properties.dashStyle = D2D1_DASH_STYLE_DASH;
+            d2dFactory->CreateStrokeStyle(properties, nullptr, 0, &strokeStyle);
+        }
+        renderTarget->DrawRoundedRectangle(
+            D2D1::RoundedRect(rect, radius, radius), borderBrush, width, strokeStyle);
+        Release(strokeStyle);
     }
 
     void Text(std::wstring_view value, IDWriteTextFormat* format, ID2D1SolidColorBrush* color,
@@ -280,53 +329,113 @@ struct MainWindowUi::Impl {
                                         : D2D1::ColorF(0.08f, 0.08f, 0.08f, enabled ? 1.0f : 0.6f));
         StrokeRounded(box, 3.0f, enabled ? design::Border : design::BorderSubtle);
         if (checked) {
-            Text(L"+", buttonFormat, secondaryBrush, box, DWRITE_TEXT_ALIGNMENT_CENTER);
+            SetBrush(secondaryBrush, D2D1::ColorF(0.10f, 0.07f, 0.02f, 1.0f));
+            renderTarget->DrawLine(D2D1::Point2F(x + 3.0f, y + 7.0f),
+                                   D2D1::Point2F(x + 6.0f, y + 10.0f), secondaryBrush, 1.6f);
+            renderTarget->DrawLine(D2D1::Point2F(x + 6.0f, y + 10.0f),
+                                   D2D1::Point2F(x + 12.0f, y + 3.0f), secondaryBrush, 1.6f);
         }
     }
 
-    void DrawButton(const D2D1_RECT_F& rect, std::wstring_view label, bool primary = false) {
-        FillRounded(rect, 5.0f, primary ? design::WithAlpha(design::Gold, 0.24f)
-                                       : D2D1::ColorF(0.10f, 0.10f, 0.10f, 0.96f));
-        StrokeRounded(rect, 5.0f, primary ? design::Gold : design::Border);
-        Text(label, buttonFormat, primary ? textBrush : secondaryBrush, rect, DWRITE_TEXT_ALIGNMENT_CENTER);
+    void DrawButton(const D2D1_RECT_F& rect, std::wstring_view label, bool primary = false,
+                    bool enabled = true) {
+        FillRounded(rect, 5.0f,
+                    enabled ? (primary ? design::WithAlpha(design::Gold, 0.24f)
+                                       : D2D1::ColorF(0.10f, 0.10f, 0.10f, 0.96f))
+                            : D2D1::ColorF(0.06f, 0.06f, 0.06f, 0.72f));
+        StrokeRounded(rect, 5.0f,
+                      enabled ? (primary ? design::Gold : design::Border) : design::BorderSubtle);
+        Text(label, buttonFormat, enabled ? (primary ? textBrush : secondaryBrush) : mutedBrush,
+             rect, DWRITE_TEXT_ALIGNMENT_CENTER);
     }
 
     void DrawCategoryCard(Category category, const CategoryView& categoryView,
                           const D2D1_RECT_F& card, bool compact) {
+        (void)compact;
         const D2D1_COLOR_F accent = CategoryColor(category);
         const std::array<const wchar_t*, 3> defaults{L"Helltide", L"Legion", L"World Boss"};
         const std::wstring_view title = categoryView.title.empty() ? defaults[static_cast<std::size_t>(IndexOf(category))]
                                                                     : std::wstring_view(categoryView.title);
-        FillRounded(card, 8.0f, categoryView.enabled ? design::Panel : D2D1::ColorF(0.03f, 0.03f, 0.03f, 0.86f));
-        StrokeRounded(card, 8.0f, D2D1::ColorF(accent.r, accent.g, accent.b, categoryView.enabled ? 0.42f : 0.18f));
-        FillRounded(D2D1::RectF(card.left, card.top, card.left + 4.0f, card.bottom), 2.0f,
-                    D2D1::ColorF(accent.r, accent.g, accent.b, categoryView.enabled ? 0.94f : 0.38f));
+        const bool expanded = categoryView.enabled && categoryView.expanded;
+        const float headerHeight = expanded ? 60.0f : 84.0f;
 
-        const D2D1_RECT_F header = D2D1::RectF(card.left + 14.0f, card.top + 7.0f, card.right - 12.0f,
-                                               card.top + (compact ? 53.0f : 58.0f));
-        AddHit(header, HitKind::CardHeader, category);
-        Text(title, headingFormat,
-             categoryView.enabled ? textBrush : mutedBrush,
-             D2D1::RectF(header.left, header.top, header.right - 94.0f, header.top + 22.0f));
-        // TTS names are configuration, not card content. The Tauri view keeps cards event-focused too.
+        FillRoundedGradient(card, design::Radius8,
+                            categoryView.enabled ? D2D1::ColorF(0.055f, 0.055f, 0.055f, 0.98f)
+                                                  : D2D1::ColorF(0.030f, 0.030f, 0.030f, 0.88f),
+                            D2D1::ColorF(0.0f, 0.0f, 0.0f, categoryView.enabled ? 0.98f : 0.92f));
+        FillRadial(card,
+                   D2D1::Point2F(card.left + (card.right - card.left) * 0.10f, card.top),
+                   std::max(180.0f, (card.right - card.left) * 0.85f), 120.0f,
+                   D2D1::ColorF(accent.r, accent.g, accent.b, categoryView.enabled ? 0.18f : 0.05f),
+                   D2D1::ColorF(accent.r, accent.g, accent.b, 0.0f), true);
+        StrokeRounded(card, design::Radius8,
+                      D2D1::ColorF(accent.r, accent.g, accent.b, categoryView.enabled ? 0.42f : 0.22f),
+                      1.0f, !categoryView.enabled);
 
+        const D2D1_RECT_F headerFill = D2D1::RectF(card.left + 1.0f, card.top + 1.0f,
+                                                  card.right - 1.0f, card.top + headerHeight - 1.0f);
+        FillRoundedGradient(headerFill, design::Radius6,
+                            D2D1::ColorF(0.047f, 0.039f, 0.039f, categoryView.enabled ? 0.62f : 0.38f),
+                            D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.35f));
+        SetBrush(borderBrush, D2D1::ColorF(design::Gold.r, design::Gold.g, design::Gold.b, 0.15f));
+        renderTarget->DrawLine(D2D1::Point2F(card.left + 1.0f, card.top + headerHeight - 1.0f),
+                               D2D1::Point2F(card.right - 1.0f, card.top + headerHeight - 1.0f),
+                               borderBrush, 1.0f);
+
+        const float stackWidth = std::min(142.0f, std::max(118.0f, (card.right - card.left) * 0.40f));
+        const float stackLeft = card.right - 8.0f - stackWidth;
+        const float metaRight = stackLeft - 8.0f;
+        const float metaLeft = metaRight - 86.0f;
+        const float disclosureLeft = card.left + 8.0f;
+        const float titleLeft = disclosureLeft + 18.0f;
+        const float titleRight = metaLeft - 8.0f;
+        const D2D1_RECT_F disclosure = D2D1::RectF(disclosureLeft, card.top + 12.0f,
+                                                   disclosureLeft + 14.0f, card.top + 30.0f);
+        Text(expanded ? L"▾" : L"▸", buttonFormat, goldBrush, disclosure, DWRITE_TEXT_ALIGNMENT_CENTER);
+        const D2D1_RECT_F cardHeaderHit = D2D1::RectF(card.left + 4.0f, card.top + 4.0f,
+                                                     std::max(card.left + 5.0f, stackLeft - 2.0f),
+                                                     card.top + headerHeight - 4.0f);
+        if (categoryView.enabled) AddHit(cardHeaderHit, HitKind::CardHeader, category);
+
+        Text(title, headingFormat, categoryView.enabled ? textBrush : mutedBrush,
+             D2D1::RectF(titleLeft, card.top + 8.0f, titleRight, card.top + 25.0f));
+        if (!categoryView.subtitle.empty()) {
+            Text(categoryView.subtitle, smallFormat, categoryView.enabled ? secondaryBrush : mutedBrush,
+                 D2D1::RectF(titleLeft, card.top + 25.0f, titleRight, card.top + 40.0f));
+        }
+
+        const wchar_t* metaLabel = categoryView.active ? L"ENDET" : L"IN";
+        // Keep label and countdown on separate rows inside the 84px source header.
+        Text(metaLabel, smallFormat, mutedBrush,
+             D2D1::RectF(metaLeft, card.top + 40.0f, metaRight, card.top + 51.0f),
+             DWRITE_TEXT_ALIGNMENT_TRAILING);
         Text(categoryView.countdown.empty() ? L"—" : categoryView.countdown, countdownFormat,
              categoryView.enabled ? goldBrush : mutedBrush,
-             D2D1::RectF(header.right - 88.0f, header.top + 2.0f, header.right, header.top + 30.0f),
-             DWRITE_TEXT_ALIGNMENT_TRAILING);
-        Text(categoryView.eventTime.empty() ? (categoryView.active ? L"läuft" : L"nächster Termin")
-                                            : categoryView.eventTime,
-             smallFormat, mutedBrush,
-             D2D1::RectF(header.right - 110.0f, header.top + 32.0f, header.right, header.bottom),
+             D2D1::RectF(metaLeft, card.top + 52.0f, metaRight, card.top + 79.0f),
              DWRITE_TEXT_ALIGNMENT_TRAILING);
 
-        const D2D1_RECT_F toggle = D2D1::RectF(card.right - 42.0f, card.top + 9.0f, card.right - 16.0f, card.top + 23.0f);
-        DrawToggle(toggle, categoryView.enabled);
-        AddHit(D2D1::RectF(card.right - 50.0f, card.top + 3.0f, card.right - 8.0f, card.top + 31.0f),
+        const float statusTop = card.top + 9.0f;
+        const D2D1_RECT_F status = D2D1::RectF(stackLeft, statusTop, stackLeft + 66.0f, statusTop + 19.0f);
+        FillRounded(status, 999.0f, categoryView.enabled ? D2D1::ColorF(design::Gold.r, design::Gold.g, design::Gold.b, 0.12f)
+                                                          : D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.04f));
+        StrokeRounded(status, 999.0f,
+                      categoryView.enabled ? D2D1::ColorF(design::Gold.r, design::Gold.g, design::Gold.b, 0.35f)
+                                            : D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.12f));
+        Text(categoryView.enabled ? L"AKTIV" : L"PAUSIERT", smallFormat,
+             categoryView.enabled ? textBrush : mutedBrush, status, DWRITE_TEXT_ALIGNMENT_CENTER);
+        Text(categoryView.eventTime.empty() ? L"—" : categoryView.eventTime, smallFormat, secondaryBrush,
+             D2D1::RectF(stackLeft + 72.0f, statusTop, card.right - 8.0f, statusTop + 19.0f),
+             DWRITE_TEXT_ALIGNMENT_TRAILING);
+
+        const float rememberTop = expanded ? card.top + 33.0f : card.top + 52.0f;
+        DrawCheckbox(stackLeft, rememberTop, categoryView.enabled);
+        Text(L"Erinnern", smallFormat, categoryView.enabled ? secondaryBrush : mutedBrush,
+             D2D1::RectF(stackLeft + 20.0f, rememberTop - 1.0f, card.right - 8.0f, rememberTop + 16.0f));
+        AddHit(D2D1::RectF(stackLeft - 4.0f, rememberTop - 4.0f, card.right - 4.0f, rememberTop + 19.0f),
                HitKind::CategoryEnabled, category);
 
-        if (!categoryView.expanded) return;
-        const float bodyTop = card.top + (compact ? 62.0f : 66.0f);
+        if (!expanded) return;
+        const float bodyTop = card.top + 62.0f;
         const float rowHeight = 48.0f;
         Text(L"Reminder", smallFormat, mutedBrush,
              D2D1::RectF(card.left + 14.0f, bodyTop, card.right - 14.0f, bodyTop + 16.0f));
@@ -375,47 +484,77 @@ struct MainWindowUi::Impl {
 
     void BuildMainLayout(float width, float height) {
         hits.clear();
-        const float margin = 8.0f;
         const float gap = 6.0f;
-        const float contentWidth = std::min(600.0f, std::max(200.0f, width - margin * 2.0f));
-        const float contentLeft = (width - contentWidth) * 0.5f;
-        const float headerBottom = 62.0f;
+        const float containerWidth = std::min(560.0f, std::max(16.0f, width));
+        const float contentWidth = containerWidth - 16.0f;
+        const float contentLeft = (width - containerWidth) * 0.5f + 8.0f;
         const float cardWidth = contentWidth;
-        const float cardBaseHeight = 98.0f;
-        float y = headerBottom;
-        for (int i = 0; i < 3; ++i) {
-            const auto& category = state.categories[static_cast<std::size_t>(i)];
-            const float cardHeight = category.expanded ? 278.0f : cardBaseHeight;
-            DrawCategoryCard(CategoryAt(i), category,
+        const float cardBaseHeight = 84.0f;
+        std::array<int, 3> order{0, 1, 2};
+        std::stable_sort(order.begin(), order.end(), [&](int left, int right) {
+            const auto& a = state.categories[static_cast<std::size_t>(left)];
+            const auto& b = state.categories[static_cast<std::size_t>(right)];
+            if (a.enabled != b.enabled) return a.enabled > b.enabled;
+            if (!a.enabled) return false;
+            return a.targetMs < b.targetMs;
+        });
+
+        float y = 70.0f;
+        for (const int index : order) {
+            const auto& category = state.categories[static_cast<std::size_t>(index)];
+            const float cardHeight = category.enabled && category.expanded ? 278.0f : cardBaseHeight;
+            DrawCategoryCard(CategoryAt(index), category,
                              D2D1::RectF(contentLeft, y, contentLeft + cardWidth, y + cardHeight), true);
             y += cardHeight + gap;
         }
-        const float footerTop = y + 2.0f;
-        const float footerBottom = std::min(height - 8.0f, footerTop + 36.0f);
-        if (footerBottom > footerTop) {
-            FillRounded(D2D1::RectF(contentLeft, footerTop, contentLeft + contentWidth, footerBottom), 7.0f,
-                        D2D1::ColorF(0.08f, 0.08f, 0.08f, 0.94f));
-            StrokeRounded(D2D1::RectF(contentLeft, footerTop, contentLeft + contentWidth, footerBottom), 7.0f, design::Border);
-            Text(L"Overlay", smallFormat, mutedBrush,
-                 D2D1::RectF(contentLeft + 12.0f, footerTop, contentLeft + 62.0f, footerBottom));
-            const D2D1_RECT_F overlayToggle = D2D1::RectF(contentLeft + 68.0f, footerTop + 11.0f, contentLeft + 94.0f, footerTop + 25.0f);
-            DrawToggle(overlayToggle, state.overlayEnabled);
-            AddHit(D2D1::RectF(contentLeft + 62.0f, footerTop + 4.0f, contentLeft + 101.0f, footerBottom - 4.0f), HitKind::OverlayEnabled);
-            const D2D1_RECT_F settings = D2D1::RectF(contentLeft + contentWidth - 90.0f, footerTop + 5.0f,
-                                                     contentLeft + contentWidth - 10.0f, footerBottom - 5.0f);
-            DrawButton(settings, L"Einstellungen", true);
-            AddHit(settings, HitKind::Settings);
+
+        // Source keeps overlay controls fixed to the viewport, outside the card flow.
+        const float overlayWidth = 136.0f;
+        const float overlayHeight = 34.0f;
+        const float overlayRight = width - 8.0f;
+        const float overlayLeft = std::max(8.0f, overlayRight - overlayWidth);
+        const float overlayTop = std::max(8.0f, height - 8.0f - overlayHeight);
+        const D2D1_RECT_F overlay = D2D1::RectF(overlayLeft, overlayTop, overlayRight, overlayTop + overlayHeight);
+        FillRoundedGradient(overlay, design::Radius8,
+                            D2D1::ColorF(0.047f, 0.047f, 0.047f, 0.96f),
+                            D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.96f));
+        StrokeRounded(overlay, design::Radius8, design::Border);
+        DrawCheckbox(overlay.left + 8.0f, overlay.top + 10.0f, state.overlayEnabled, !state.panicStop);
+        Text(L"Overlay", smallFormat, secondaryBrush,
+             D2D1::RectF(overlay.left + 28.0f, overlay.top + 8.0f, overlay.left + 82.0f, overlay.bottom - 8.0f));
+        if (!state.panicStop) {
+            AddHit(D2D1::RectF(overlay.left + 4.0f, overlay.top + 3.0f,
+                               overlay.left + 84.0f, overlay.bottom - 3.0f),
+                   HitKind::OverlayEnabled);
         }
-        AddHit(D2D1::RectF(width - margin - 52.0f, 8.0f, width - margin, 50.0f), HitKind::Settings);
+        const D2D1_RECT_F position = D2D1::RectF(overlay.right - 54.0f, overlay.top + 5.0f,
+                                                  overlay.right - 8.0f, overlay.bottom - 5.0f);
+        const bool positionEnabled = !state.panicStop && state.overlayEnabled;
+        DrawButton(position, L"Position", false, positionEnabled);
+        if (positionEnabled) AddHit(position, HitKind::BeginOverlayMove);
     }
 
     void DrawHeader(float width) {
-        FillRect(D2D1::RectF(0.0f, 0.0f, width, 3.0f), design::Gold);
-        Text(L"hell", titleFormat, textBrush, D2D1::RectF(14.0f, 8.0f, 54.0f, 34.0f));
+        const float containerWidth = std::min(560.0f, std::max(16.0f, width));
+        const float contentWidth = containerWidth - 16.0f;
+        const float left = (width - containerWidth) * 0.5f + 8.0f;
+        const D2D1_RECT_F header = D2D1::RectF(left, 8.0f, left + contentWidth, 62.0f);
+        FillRoundedGradient(header, design::Radius8,
+                            D2D1::ColorF(0.055f, 0.055f, 0.055f, 0.98f),
+                            D2D1::ColorF(0.025f, 0.025f, 0.025f, 0.98f));
+        StrokeRounded(header, design::Radius8, design::Border);
+        SetBrush(goldBrush, D2D1::ColorF(design::Gold.r, design::Gold.g, design::Gold.b, 0.12f));
+        renderTarget->DrawLine(D2D1::Point2F(header.left + 1.0f, header.top + 1.0f),
+                               D2D1::Point2F(header.right - 1.0f, header.top + 1.0f), goldBrush, 1.0f);
+        Text(L"hell", titleFormat, textBrush, D2D1::RectF(header.left + 8.0f, header.top + 6.0f,
+                                                          header.left + 54.0f, header.top + 29.0f));
         SetBrush(redBrush, design::Legion);
-        Text(L"time", titleFormat, redBrush, D2D1::RectF(51.0f, 8.0f, 94.0f, 34.0f));
-        Text(L"Event Timers", smallFormat, mutedBrush, D2D1::RectF(15.0f, 35.0f, 130.0f, 54.0f));
-        const D2D1_RECT_F settings = D2D1::RectF(width - 60.0f, 10.0f, width - 14.0f, 42.0f);
+        Text(L"time", titleFormat, redBrush, D2D1::RectF(header.left + 45.0f, header.top + 6.0f,
+                                                         header.left + 92.0f, header.top + 29.0f));
+        Text(L"Event Timers", smallFormat, mutedBrush, D2D1::RectF(header.left + 8.0f, header.top + 34.0f,
+                                                                  header.left + 130.0f, header.bottom - 6.0f));
+        const D2D1_RECT_F settings = D2D1::RectF(header.right - 48.0f, header.top + 9.0f,
+                                                 header.right - 10.0f, header.top + 39.0f);
         DrawButton(settings, L"\u2699");
         AddHit(settings, HitKind::Settings);
     }
@@ -582,6 +721,33 @@ struct MainWindowUi::Impl {
         // Panel hit is registered before controls, so controls win reverse hit-test order.
     }
 
+    int PreferredMainClientHeight(int clientWidth) const noexcept {
+        (void)clientWidth;
+        constexpr float gap = 6.0f;
+        constexpr float headerTop = 8.0f;
+        constexpr float headerHeight = 54.0f;
+        constexpr float gridTop = headerTop + headerHeight + 8.0f;
+        constexpr float cardHeight = 84.0f;
+        float contentBottom = gridTop;
+        std::array<int, 3> order{0, 1, 2};
+        std::stable_sort(order.begin(), order.end(), [&](int left, int right) {
+            const auto& a = state.categories[static_cast<std::size_t>(left)];
+            const auto& b = state.categories[static_cast<std::size_t>(right)];
+            if (a.enabled != b.enabled) return a.enabled > b.enabled;
+            if (!a.enabled) return false;
+            return a.targetMs < b.targetMs;
+        });
+        for (std::size_t position = 0; position < order.size(); ++position) {
+            const int index = order[position];
+            const auto& category = state.categories[static_cast<std::size_t>(index)];
+            contentBottom += (category.enabled && category.expanded) ? 278.0f : cardHeight;
+            if (position + 1 < order.size()) contentBottom += gap;
+        }
+        // Source adds fixed overlay clearance and clamps the logical window height.
+        const float desired = contentBottom + 8.0f + 34.0f + 36.0f;
+        return static_cast<int>(std::clamp(std::lround(desired), 360L, 980L));
+    }
+
     void Render() {
         if (!window || FAILED(CreateDeviceResources())) return;
         RECT client{};
@@ -590,7 +756,16 @@ struct MainWindowUi::Impl {
         const float height = static_cast<float>(std::max<LONG>(1, client.bottom - client.top));
         renderTarget->BeginDraw();
         renderTarget->Clear(design::Background);
-        FillRect(D2D1::RectF(0.0f, 0.0f, width, std::min(height, 170.0f)), design::WithAlpha(design::BurgundyBright, 0.30f));
+        FillRadial(D2D1::RectF(0.0f, 0.0f, width, std::min(height, 260.0f)),
+                   D2D1::Point2F(width * 0.5f, 0.0f), std::max(160.0f, width * 0.90f), 260.0f,
+                   design::WithAlpha(design::Burgundy, 0.24f), D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
+        FillRadial(D2D1::RectF(0.0f, std::max(0.0f, height - 240.0f), width, height),
+                   D2D1::Point2F(width * 0.5f, height), std::max(180.0f, width * 0.75f), 240.0f,
+                   design::WithAlpha(design::BurgundyDark, 0.18f), D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
+        for (float scanline = 0.0f; scanline < height; scanline += 4.0f) {
+            FillRect(D2D1::RectF(0.0f, scanline + 2.0f, width, scanline + 4.0f),
+                     D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.035f));
+        }
         hits.clear();
         if (settingsOpen) {
             DrawModal(width, height);
@@ -936,6 +1111,10 @@ void MainWindowUi::CloseSettings() {
 
 bool MainWindowUi::IsSettingsOpen() const noexcept {
     return impl_->settingsOpen;
+}
+
+int MainWindowUi::PreferredMainClientHeight(int clientWidth) const noexcept {
+    return impl_->PreferredMainClientHeight(clientWidth);
 }
 
 void MainWindowUi::Invalidate() const {

@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <string>
 
 namespace helltime::ui {
@@ -81,6 +82,8 @@ struct CategoryView {
     std::wstring subtitle;
     std::wstring countdown{L"—"};
     std::wstring eventTime;
+    // Source ordering uses the visible event target, not the fixed category order.
+    std::int64_t targetMs{std::numeric_limits<std::int64_t>::max()};
     bool enabled{true};
     bool active{false};
     bool expanded{false};
@@ -153,6 +156,7 @@ public:
     void OpenSettings();
     void CloseSettings();
     bool IsSettingsOpen() const noexcept;
+    int PreferredMainClientHeight(int clientWidth) const noexcept;
     void Invalidate() const;
 
     // Main window forwards messages here. Returns true when UI consumed message.

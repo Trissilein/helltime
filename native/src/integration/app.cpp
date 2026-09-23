@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <ctime>
+#include <cstdlib>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -21,6 +22,7 @@ constexpr wchar_t kClassName[] = L"HelltimeNativeMainWindow";
 constexpr wchar_t kTitle[] = L"helltime";
 constexpr UINT kTrayMessage = WM_APP + 1;
 constexpr UINT kTimerId = 1;
+constexpr UINT kInitialResizeTimerId = 2;
 constexpr UINT kTrayShow = 1001;
 constexpr UINT kTraySettings = 1002;
 constexpr UINT kTrayMoveOverlay = 1003;
@@ -31,15 +33,15 @@ constexpr UINT kTrayToggleOverlay = 1007;
 constexpr UINT kTrayToggleReminders = 1008;
 
 std::wstring countdown(std::int64_t milliseconds) {
-    if (milliseconds <= 0) return L"READY";
-    auto seconds = milliseconds / 1000;
+    auto seconds = std::max<std::int64_t>(0, milliseconds) / 1000;
     const auto hours = seconds / 3600;
     seconds %= 3600;
     const auto minutes = seconds / 60;
     seconds %= 60;
     std::wostringstream result;
-    if (hours > 0) result << hours << L":" << std::setfill(L'0') << std::setw(2);
-    result << minutes << L":" << std::setfill(L'0') << std::setw(2) << seconds;
+    result << std::setfill(L'0');
+    if (hours > 0) result << std::setw(2) << hours << L":";
+    result << std::setw(2) << minutes << L":" << std::setw(2) << seconds;
     return result.str();
 }
 
@@ -119,8 +121,9 @@ int NativeApp::Run() {
     klass.hbrBackground = nullptr;
     klass.style = CS_HREDRAW | CS_VREDRAW;
     RegisterClassExW(&klass);
+    // Source starts at 380x720 logical pixels and remains user-resizable.
     window_ = CreateWindowExW(0, kClassName, kTitle, WS_OVERLAPPEDWINDOW,
-                               CW_USEDEFAULT, CW_USEDEFAULT, 980, 660, nullptr, nullptr, instance_, this);
+                               CW_USEDEFAULT, CW_USEDEFAULT, 380, 720, nullptr, nullptr, instance_, this);
     if (!window_) { CoUninitialize(); return 1; }
     const BOOL dark = TRUE;
     // Windows 10 uses 20 on current builds; 19 keeps older supported builds dark too.
@@ -138,6 +141,8 @@ int NativeApp::Run() {
     Refresh(false);
     ShowWindow(window_, showCommand_ == SW_HIDE ? SW_SHOWNORMAL : showCommand_);
     UpdateWindow(window_);
+    // Match the source mount effect: fit once after the first visible paint, never per tick.
+    SetTimer(window_, kInitialResizeTimerId, 120, nullptr);
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0) {
         TranslateMessage(&message);
@@ -172,7 +177,8 @@ ui::UiState NativeApp::MakeUiState(std::int64_t nowMs) const {
         auto& category = result.categories[static_cast<std::size_t>(index)];
         const auto& configured = settings_.categories[static_cast<std::size_t>(index)];
         category.title = titles[static_cast<std::size_t>(index)];
-        category.subtitle = utf8Wide(configured.ttsName);
+        // TTS name is configuration only. Schedule has no verified boss metadata.
+        category.subtitle.clear();
         category.enabled = configured.enabled;
         category.timerCount = configured.timerCount;
         for (int timer = 0; timer < 3; ++timer) {
@@ -188,14 +194,16 @@ ui::UiState NativeApp::MakeUiState(std::int64_t nowMs) const {
             const auto timing = domain::findActiveOrNextHelltide(items, nowMs);
             if (timing) {
                 category.active = timing->active;
+                category.targetMs = timing->targetMs;
                 category.countdown = countdown(timing->targetMs - nowMs);
-                category.eventTime = timing->active ? L"bis " + localTime(timing->targetMs) : L"ab " + localTime(timing->startMs);
+                category.eventTime = localTime(timing->targetMs);
             }
         } else {
             const auto next = domain::findNext(items, nowMs);
             if (next) {
-                category.countdown = countdown(next->timestamp * 1000 - nowMs);
-                category.eventTime = localTime(next->timestamp * 1000);
+                category.targetMs = next->timestamp * 1000;
+                category.countdown = countdown(category.targetMs - nowMs);
+                category.eventTime = localTime(category.targetMs);
             }
         }
     }
@@ -208,13 +216,43 @@ void NativeApp::Refresh(bool preserveUiState) {
     schedule_ = domain::generateSchedule(now);
     auto next = MakeUiState(now);
     if (preserveUiState) {
-        for (int i = 0; i < 3; ++i) next.categories[static_cast<std::size_t>(i)].expanded = old.categories[static_cast<std::size_t>(i)].expanded;
+        for (int i = 0; i < 3; ++i) {
+            next.categories[static_cast<std::size_t>(i)].expanded =
+                old.categories[static_cast<std::size_t>(i)].expanded &&
+                next.categories[static_cast<std::size_t>(i)].enabled;
+        }
     }
     ui_.SetState(next);
     overlay_.Update(next, settings_, schedule_, now);
     next.overlayDiagnostics = toUiOverlayDiagnostics(overlay_.GetDiagnostics());
     ui_.SetState(next);
+    RECT client{};
+    GetClientRect(window_, &client);
+    const int preferredClientHeight = ui_.PreferredMainClientHeight(
+        std::max<LONG>(1, client.right - client.left));
+    if (initialMainSize_) {
+        initialMainSize_ = false;
+        lastPreferredClientHeight_ = preferredClientHeight;
+    } else if (preserveUiState && preferredClientHeight != lastPreferredClientHeight_) {
+        lastPreferredClientHeight_ = preferredClientHeight;
+        AdjustMainWindowHeight();
+    }
     InvalidateRect(window_, nullptr, FALSE);
+}
+
+void NativeApp::AdjustMainWindowHeight() {
+    if (!window_ || ui_.IsSettingsOpen() || !IsWindowVisible(window_)) return;
+    RECT client{};
+    RECT outer{};
+    if (!GetClientRect(window_, &client) || !GetWindowRect(window_, &outer)) return;
+    const int clientWidth = std::max<LONG>(1, client.right - client.left);
+    const int frameHeight = std::max<LONG>(0, (outer.bottom - outer.top) - (client.bottom - client.top));
+    const int desiredClientHeight = ui_.PreferredMainClientHeight(clientWidth);
+    const int desiredOuterHeight = std::clamp(desiredClientHeight + frameHeight, 360, 980);
+    const int currentOuterHeight = outer.bottom - outer.top;
+    if (std::abs(desiredOuterHeight - currentOuterHeight) <= 16) return;
+    SetWindowPos(window_, nullptr, 0, 0, outer.right - outer.left, desiredOuterHeight,
+                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 void NativeApp::Tick() {
@@ -401,7 +439,13 @@ LRESULT NativeApp::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     switch (message) {
-    case WM_TIMER: if (wParam == kTimerId) Tick(); return 0;
+    case WM_TIMER:
+        if (wParam == kTimerId) Tick();
+        if (wParam == kInitialResizeTimerId) {
+            KillTimer(window_, kInitialResizeTimerId);
+            AdjustMainWindowHeight();
+        }
+        return 0;
     case WM_PAINT: { PAINTSTRUCT paint{}; BeginPaint(window_, &paint); ui_.Render(); EndPaint(window_, &paint); return 0; }
     case WM_ERASEBKGND: return 1;
     case WM_SIZE: ui_.HandleMessage(message, wParam, lParam); return 0;
