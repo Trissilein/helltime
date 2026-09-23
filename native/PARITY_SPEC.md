@@ -100,6 +100,9 @@ sufficient; source layering is part of visual parity.
 ### 4.1 Window and container
 
 - Source container: centered, `max-width: 560px`, `padding: 8px`.
+- Initial Tauri window: 380×720 logical pixels, resizable. The visible content
+  drives window height between 360 and 980 px as implemented in
+  `src/App.tsx:197-240`.
 - Main grid: 12 columns, `margin-top: 8px`, `gap: 6px`; every event card spans
   all 12 columns.
 - Header: source card styling, `padding: 6px 8px`, 8 px radius, header gear in
@@ -114,8 +117,9 @@ For each source category in `orderedTypes`:
 
 1. A `categoryCard` uses its category token, source border/radial glow, and
    compact card header. It has no hard left accent rail.
-2. Left action is a disclosure button. It displays title and optional World
-   Boss subtitle, then `IN` or `ENDET` plus tabular countdown.
+2. Left action is a disclosure button. It displays title and the source
+   subtitle line (a placeholder `—` when no metadata exists), then `IN` or
+   `ENDET` plus tabular countdown. Boss/location text appears only with data.
 3. Right stack displays `AKTIV` or `PAUSIERT`, local event time, and the
    `Erinnern` checkbox.
 4. Enabled categories sort ascending by timing target. Disabled categories are
@@ -144,7 +148,9 @@ state only.
 | Condition | Label | Type | Value/range/step | Disabled rule | Persisted path | Action |
 |---|---|---|---|---|---|---|
 | Every enabled expanded card | `Timer Anzahl` | select | 1, 2, 3 | never | `categories[type].timerCount` | Changes number of timer editors |
-| Every enabled expanded card | `TTS Name` | text input | source text; no HTML maxlength; normalizer limits persisted value to 80 characters | never | `categories[type].ttsName` | Changes spoken label |
+| Every enabled expanded card | `TTS Name` | text input | source text; no HTML maxlength; source loader trims to 80 characters on restart | never | `categories[type].ttsName` | Changes spoken label |
+| Every enabled expanded card | `Nächster Start` / `Ende` and local time | status output | current event timing | n/a | — | Shows next start or Helltide end |
+| World Boss with verified data | `Ort` | status output | actual location only | n/a | — | Shows available location; no invented value |
 | World Boss | `{boss}` hint | text output | n/a | n/a | — | Explains placeholder |
 | Helltide | `Map öffnen` | primary small button | n/a | never | — | Opens `https://helltides.com/` |
 | Helltide | map/mystery-chest hint | text output | n/a | n/a | — | Display only |
@@ -193,7 +199,7 @@ with continuous sliders, or source checkboxes with switch widgets.
 | Event-spezifische Reminder | explanatory text | text output | n/a | n/a | — | Directs user to event cards |
 | Footer | `Debug` | small button | expanded/collapsed | never | — | Toggles Debug section |
 | Debug, when open | `Overlay Status` | button | n/a | panic stop | — | Shows window status and diagnostics |
-| Debug, when open | `Logs leeren` | button | n/a | never | diagnostic storage | Clears diagnostics |
+| Debug, when open | `Logs leeren` | button | n/a | panic stop | diagnostic storage | Clears diagnostics |
 | Debug, when available | diagnostic output | preformatted text | last status/log lines | n/a | diagnostic storage | Display only |
 
 ### 5.3 Explicit removal list
@@ -222,7 +228,7 @@ Tauri reference first presents them too.
 |---|---|
 | Overlay disabled or panic stop | Overlay window hidden |
 | Overview, at least one enabled row | Window visible immediately, topmost, click-through, on current workspace |
-| Overview, no enabled rows | Window hidden except during positioning |
+| Overview, no enabled rows | Tauri keeps the host window but paints it transparent; Native may hide it if no visible pixels, with diagnostics reporting this gate |
 | Toast, idle | Window hidden. This is intentional, not a failed mode change. |
 | Toast preview | Show source preview for 8.0 s ±0.5 s |
 | Due reminder | Show source event toast for 5.2 s ±0.5 s |
@@ -234,6 +240,11 @@ The native application currently has all visible setting gates true in
 An invisible Overview is therefore not explained by disabled settings or an
 off-screen saved position. Creation, render, and show failures need observable
 native diagnostics before claiming a root cause.
+
+Preview text is `Overlay Vorschau` and `00:30` in `src/App.tsx:606-612`.
+Preview and due reminder temporarily replace an Overview, then restore it.
+Overview rows sort by target time; event-category and overlay-category gates
+both apply. Active Helltide uses `Helltide endet`.
 
 ### 6.2 Overlay visual geometry
 
@@ -324,11 +335,11 @@ Automate or manually execute every row before parity is complete.
 |---|---|
 | Enable/disable each category | Correct persistence, visual paused state, disabled category sorted last |
 | Expand each category | Exactly one enabled category open; source controls shown |
-| Timer lead value 0 | Persisted and displayed as source `Trigger: now!` |
+| Timer lead value 0 | Displayed as `Trigger: now!` and preserved after restart per approved Native plan. Current Tauri UI saves 0, but its loader normalizes it to 1; this gate is an intentional correction, not proof of current Tauri behavior. |
 | Timer lead values | Only 5-minute values selectable |
 | Pitch values | Only 100-Hz values from 200 to 2000 selectable |
 | Sound disabled | Volume/tone-test disabled exactly where source disables them |
-| Overview filters | Each overlay category checkbox affects only its row |
+| Overview filters | Overlay and event category checkboxes jointly decide each row |
 | Toast idle | No idle toast window/content |
 | Preview | Correct visible preview duration and geometry |
 | Reset position | Recoverable `(40,40)` position |
