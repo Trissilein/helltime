@@ -1,8 +1,41 @@
 # Helltime – Native Win32 Handoff
 
-Stand: 2026-09-22  
+Stand: 2026-09-23  
 Repository: `D:\GIT\helltime`  
 Basis vor diesem Handoff: `13b490c feat: add native Win32 Helltime client`
+
+## Aktueller Stand 2026-09-23
+
+Die folgenden Einträge ersetzen ältere Fortschritts- und Artefaktangaben weiter
+unten; diese bleiben als Verlauf erhalten. Der Native-Port ist weiterhin **nicht
+abnahmefähig**. Build und CTest sind technische Nachweise, kein visueller oder
+funktionaler Paritätsbeleg.
+
+- `5033f3e`, `635ea4e`: `native/PARITY_SPEC.md` als Tauri-basierter
+  Kontroll- und Verhaltensvertrag, einschließlich bekannter Tauri-Istabweichung
+  beim Laden eines 0-Minuten-Timers.
+- `744e17d`, `325d8a7`: DIB-/Layered-Window-Pipeline repariert und Overlay-
+  Diagnose eingebaut. Das HWND hatte beim Runtime-Probe sichtbare Bounds und
+  einen Frame mit Nichtnull-Alpha; **sichtbare Pixel für den Nutzer sind damit
+  nicht bewiesen**. Live-Overlay, Drag, Click-through und Diablo bleiben Gates.
+- `c189c67`: zentrale Design-Tokens.
+- `85beaf8`: Hauptansicht strukturell neu gezeichnet: 380×720 Startgröße,
+  560-px-Container mit 8-px-Innenabstand, zeitlich sortierte Karten,
+  genau ein Settings-Einstieg und Floating-Overlay-Controls. Release-Build,
+  CTest und Prozess-Smoke bestanden; Screenshotvergleich steht aus.
+- `86a6aea`, `3506a0c`: Original-Icon als EXE-Ressource eingebettet und für
+  großes/kleines Fenstericon sowie Tray geladen.
+- `7b1a4c3`: Fired-State-Domänenspeicher mit 12-h-Pruning und atomarem
+  `fired.json`-Schreiben; Release-Assertions der Domain-Tests sind nun aktiv.
+  Die Anbindung an den Reminder-Tick ist noch offen.
+- Alle genannten Commits sind nach `origin/main` gepusht. Das vorhandene
+  `dist\helltime-native.exe` ist **nicht** aus diesem Quellstand neu erzeugt.
+  `dist` erst nach letztem Quellcommit und vollständigem Release-Gate erneuern.
+
+Nächste Arbeit: expandierte Event-Karten und Settings exakt nach `src/App.tsx`
+und `src/styles.css`, Fired-State/Audio-Reihenfolge in den laufenden Reminder
+einbinden, Overview/Toast visuell angleichen, dann reproduzierbare Screenshots
+und die vollständige manuelle Windows-Matrix. Die Tauri-Version bleibt unberührt.
 
 ## Fortschritt nach Handoff
 
