@@ -33,10 +33,11 @@ applications. Dynamic content is masked as defined in section 8. A capture
 made merely within the same real-time minute is not deterministic enough.
 
 Provided reference screenshot measurements include outer Windows chrome. At
-approximately 766 px outer width, Tauri content is 544 px wide; native content
-currently is 600 px wide. Tauri closed cards are about 84 px tall; native cards
-currently are 98 px tall. These measurements establish the visible target,
-while CSS/D2D geometry below is the implementation source of truth.
+approximately 766 px outer width, Tauri content is 544 px wide; the earlier
+native baseline was 600 px. Tauri closed cards are about 84 px tall; the earlier
+native baseline was 98 px. The M3 source change now targets 544/84, but awaits
+same-state screenshot measurement. CSS/D2D geometry below remains the source
+of truth, not the unverified native render.
 
 ## 2. Six reference states
 
