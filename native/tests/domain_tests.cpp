@@ -34,6 +34,21 @@ std::wstring temporaryLocalAppData() {
     return uniquePath;
 }
 
+std::size_t utf8CodePointCount(const std::string& value) {
+    std::size_t count = 0;
+    for (std::size_t index = 0; index < value.size();) {
+        const auto byte = static_cast<unsigned char>(value[index]);
+        const std::size_t width = byte < 0x80 ? 1 : (byte & 0xE0) == 0xC0 ? 2 : (byte & 0xF0) == 0xE0 ? 3 : 4;
+        assert(width <= 4 && index + width <= value.size());
+        for (std::size_t continuation = 1; continuation < width; ++continuation) {
+            assert((static_cast<unsigned char>(value[index + continuation]) & 0xC0) == 0x80);
+        }
+        ++count;
+        index += width;
+    }
+    return count;
+}
+
 } // namespace
 
 int main() {
@@ -88,8 +103,43 @@ int main() {
     assert(clamped.volume == 0 && clamped.overlayBgHex == "#0b1220");
     assert(clamped.overlayScaleX == 2 && clamped.overlayScaleY == 0.6);
     assert(clamped.overlayBgOpacity == 0 && clamped.overlayLineBgOpacity == 1);
-    assert(clamped.categories[0].timerCount == 3 && clamped.categories[0].timers[0].minutesBefore == 1);
+    assert(clamped.categories[0].timerCount == 3 && clamped.categories[0].timers[0].minutesBefore == 0);
     assert(clamped.categories[0].timers[0].pitchHz == 2000 && clamped.categories[0].ttsName.size() == 80);
+
+    // Native keeps the approved range and step values across a save/reload.
+    auto snapped = defaultSettings();
+    snapped.categories[0].timers[0].minutesBefore = 0;
+    snapped.categories[0].timers[0].pitchHz = 249;
+    assert(saveSettings(snapped));
+    auto roundTrip = loadSettings();
+    assert(roundTrip.categories[0].timers[0].minutesBefore == 0);
+    assert(roundTrip.categories[0].timers[0].pitchHz == 200);
+
+    snapped.categories[0].timers[0].minutesBefore = 7;
+    snapped.categories[0].timers[0].pitchHz = 250;
+    assert(saveSettings(snapped));
+    roundTrip = loadSettings();
+    assert(roundTrip.categories[0].timers[0].minutesBefore == 5);
+    assert(roundTrip.categories[0].timers[0].pitchHz == 300);
+
+    snapped.categories[0].timers[0].minutesBefore = 8;
+    snapped.categories[0].timers[0].pitchHz = 351;
+    assert(saveSettings(snapped));
+    roundTrip = loadSettings();
+    assert(roundTrip.categories[0].timers[0].minutesBefore == 10);
+    assert(roundTrip.categories[0].timers[0].pitchHz == 400);
+
+    // UTF-8 TTS names are limited by code points, not raw bytes, and survive
+    // the JSON round-trip without being cut in the middle of a character.
+    std::string unicodeName;
+    for (int index = 0; index < 80; ++index) unicodeName += "\xC3\xA4";
+    writeRaw(path, "{\"version\":6,\"categories\":{\"helltide\":{\"ttsName\":\"" + unicodeName + "\"}}}");
+    const auto unicodeSettings = loadSettings();
+    assert(unicodeSettings.categories[0].ttsName.size() == 160);
+    assert(utf8CodePointCount(unicodeSettings.categories[0].ttsName) == 80);
+    assert(saveSettings(unicodeSettings));
+    const auto unicodeReloaded = loadSettings();
+    assert(unicodeReloaded.categories[0].ttsName == unicodeSettings.categories[0].ttsName);
 
     const auto firedPath = firedStateFilePath();
     assert(firedPath.find(L"HelltimeNative\\fired.json") != std::wstring::npos);

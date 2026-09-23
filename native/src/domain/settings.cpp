@@ -293,6 +293,14 @@ int clampInt(double value, int fallback, int minimum, int maximum) {
     return static_cast<int>(std::clamp<long long>(rounded, minimum, maximum));
 }
 
+int clampStep(double value, int fallback, int minimum, int maximum, int step) {
+    const auto clamped = clampInt(value, fallback, minimum, maximum);
+    if (step <= 1) return clamped;
+    const auto offset = clamped - minimum;
+    const auto snapped = minimum + ((offset + step / 2) / step) * step;
+    return std::clamp(snapped, minimum, maximum);
+}
+
 std::string trimAndLimit(std::string value) {
     auto isSpace = [](unsigned char c) { return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\f'; };
     auto first = value.begin();
@@ -352,10 +360,10 @@ TimerSettings normalizeTimer(const JsonValue* raw, const TimerSettings& fallback
     TimerSettings result = fallback;
     if (!raw || raw->kind != JsonValue::Kind::Object) return result;
     double number = 0;
-    if (jsonNumber(member(*raw, "minutesBefore"), number)) result.minutesBefore = clampInt(number, fallback.minutesBefore, 1, 60);
+    if (jsonNumber(member(*raw, "minutesBefore"), number)) result.minutesBefore = clampStep(number, fallback.minutesBefore, 0, 60, 5);
     result.ttsEnabled = jsonBool(member(*raw, "ttsEnabled"), fallback.ttsEnabled);
     result.beepPattern = beepPatternFromJson(member(*raw, "beepPattern"), fallback.beepPattern);
-    if (jsonNumber(member(*raw, "pitchHz"), number)) result.pitchHz = clampInt(number, fallback.pitchHz, 120, 2000);
+    if (jsonNumber(member(*raw, "pitchHz"), number)) result.pitchHz = clampStep(number, fallback.pitchHz, 200, 2000, 100);
     return result;
 }
 
@@ -591,10 +599,10 @@ Settings normalizeSettings(const Settings& settings) {
         for (std::size_t timer = 0; timer < result.categories[category].timers.size(); ++timer) {
             const auto& source = settings.categories[category].timers[timer];
             auto& destination = result.categories[category].timers[timer];
-            destination.minutesBefore = std::clamp(source.minutesBefore, 1, 60);
+            destination.minutesBefore = std::clamp((std::max(source.minutesBefore, 0) + 2) / 5 * 5, 0, 60);
             destination.ttsEnabled = source.ttsEnabled;
             destination.beepPattern = source.beepPattern;
-            destination.pitchHz = std::clamp(source.pitchHz, 120, 2000);
+            destination.pitchHz = std::clamp((std::max(source.pitchHz, 200) - 200 + 50) / 100 * 100 + 200, 200, 2000);
         }
     }
     return result;

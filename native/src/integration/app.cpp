@@ -14,6 +14,8 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <string_view>
+#include <thread>
 
 namespace helltime::integration {
 namespace {
@@ -62,6 +64,62 @@ std::wstring utf8Wide(const std::string& text) {
     std::wstring result(static_cast<std::size_t>(size), L'\0');
     MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), result.data(), size);
     return result;
+}
+
+std::string wideUtf8(const std::wstring& text) {
+    if (text.empty()) return {};
+    const int size = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(),
+                                         static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
+    if (size <= 0) {
+        const int fallbackSize = WideCharToMultiByte(CP_UTF8, 0, text.data(),
+                                                     static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
+        if (fallbackSize <= 0) return {};
+        std::string result(static_cast<std::size_t>(fallbackSize), '\0');
+        WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()),
+                            result.data(), fallbackSize, nullptr, nullptr);
+        return result;
+    }
+    std::string result(static_cast<std::size_t>(size), '\0');
+    WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()),
+                        result.data(), size, nullptr, nullptr);
+    return result;
+}
+
+std::size_t categoryIndex(ui::Category category) {
+    const auto value = static_cast<int>(category);
+    return static_cast<std::size_t>(std::clamp(value, 0, 2));
+}
+
+bool validTimerIndex(int index) {
+    return index >= 0 && index < 3;
+}
+
+std::string spokenCategoryName(int category, std::string configured) {
+    constexpr std::array<const char*, 3> defaults{
+        "H\xC3\xB6llenhochwasser", "Legionellen", "Weltscheff"};
+    const auto safeCategory = std::clamp(category, 0, 2);
+    if (configured.empty()) configured = defaults[static_cast<std::size_t>(safeCategory)];
+    if (safeCategory == 2) {
+        constexpr std::string_view placeholder{"{boss}"};
+        std::size_t position = 0;
+        while ((position = configured.find(placeholder, position)) != std::string::npos) {
+            configured.erase(position, placeholder.size());
+        }
+        for (std::size_t index = 0; index + 1 < configured.size();) {
+            if (configured[index] == ' ' && configured[index + 1] == ' ') configured.erase(index, 1);
+            else ++index;
+        }
+        while (!configured.empty() && configured.front() == ' ') configured.erase(configured.begin());
+        while (!configured.empty() && configured.back() == ' ') configured.pop_back();
+        if (configured.empty()) configured = defaults[2];
+    }
+    return configured;
+}
+
+std::string testTimerRemainingSpeech(int minutesBefore) {
+    if (minutesBefore <= 0) return "0 Sekunden";
+    if (minutesBefore == 1) return "1 Minute";
+    return std::to_string(minutesBefore) + " Minuten";
 }
 
 const std::vector<domain::ScheduleItem>& itemsFor(const domain::Schedule& schedule, int index) {
@@ -183,8 +241,12 @@ ui::UiState NativeApp::MakeUiState(std::int64_t nowMs) const {
         auto& category = result.categories[static_cast<std::size_t>(index)];
         const auto& configured = settings_.categories[static_cast<std::size_t>(index)];
         category.title = titles[static_cast<std::size_t>(index)];
+        category.ttsName = utf8Wide(configured.ttsName);
         // TTS name is configuration only. Schedule has no verified boss metadata.
         category.subtitle.clear();
+        category.summaryLabel.clear();
+        category.summaryTime.clear();
+        category.location.clear();
         category.enabled = configured.enabled;
         category.timerCount = configured.timerCount;
         for (int timer = 0; timer < 3; ++timer) {
@@ -203,6 +265,8 @@ ui::UiState NativeApp::MakeUiState(std::int64_t nowMs) const {
                 category.targetMs = timing->targetMs;
                 category.countdown = countdown(timing->targetMs - nowMs);
                 category.eventTime = localTime(timing->targetMs);
+                category.summaryLabel = timing->active ? L"Ende" : L"Nächster Start";
+                category.summaryTime = category.eventTime;
             }
         } else {
             const auto next = domain::findNext(items, nowMs);
@@ -210,6 +274,8 @@ ui::UiState NativeApp::MakeUiState(std::int64_t nowMs) const {
                 category.targetMs = next->timestamp * 1000;
                 category.countdown = countdown(category.targetMs - nowMs);
                 category.eventTime = localTime(category.targetMs);
+                category.summaryLabel = L"Nächster Start";
+                category.summaryTime = category.eventTime;
             }
         }
     }
@@ -277,7 +343,7 @@ void NativeApp::Tick() {
                 if (due.due.empty()) continue;
                 const auto announce = [&](const domain::DueReminderTimer& reminder) {
                     const auto& timer = configured.timers[static_cast<std::size_t>(reminder.index)];
-                    const auto name = configured.ttsName.empty() ? std::string("Helltime") : configured.ttsName;
+                    const auto name = spokenCategoryName(category, configured.ttsName);
                     if (settings_.soundEnabled && timer.ttsEnabled) {
                         SpeakReminder(name + " in " + std::to_string(timer.minutesBefore) + " Minuten", static_cast<int>(settings_.volume * 100.0));
                     }
@@ -304,7 +370,7 @@ void NativeApp::Tick() {
 }
 
 void NativeApp::ApplyAction(const ui::UiAction& action) {
-    const auto index = static_cast<std::size_t>(static_cast<int>(action.category));
+    const auto index = categoryIndex(action.category);
     switch (action.kind) {
     case ui::ActionKind::SetOverlayEnabled: settings_.overlayWindowEnabled = action.enabled; break;
     case ui::ActionKind::SetOverlayMode: settings_.overlayWindowMode = action.mode == ui::OverlayMode::Toast ? domain::OverlayWindowMode::Toast : domain::OverlayWindowMode::Overview; break;
@@ -313,7 +379,7 @@ void NativeApp::ApplyAction(const ui::UiAction& action) {
     case ui::ActionKind::SetOverlayScaleY: settings_.overlayScaleY = action.value; break;
     case ui::ActionKind::SetOverlayOpacity: settings_.overlayBgOpacity = action.value; break;
     case ui::ActionKind::PreviewOverlay:
-        overlay_.ShowPreviewToast(L"Helltime Vorschau", L"Nächster Timer: 00:30");
+        overlay_.ShowPreviewToast(L"Overlay Vorschau", L"00:30");
         Refresh(true);
         return;
     case ui::ActionKind::BeginOverlayMove:
@@ -339,11 +405,52 @@ void NativeApp::ApplyAction(const ui::UiAction& action) {
     case ui::ActionKind::SetAutoRefreshEnabled: settings_.autoRefreshEnabled = action.enabled; break;
     case ui::ActionKind::SetSystemToastsEnabled: settings_.systemToastsEnabled = action.enabled; break;
     case ui::ActionKind::SetCategoryEnabled: settings_.categories[index].enabled = action.enabled; break;
+    case ui::ActionKind::OpenHelltidesMap:
+        ShellExecuteW(nullptr, L"open", L"https://helltides.com/", nullptr, nullptr, SW_SHOWNORMAL);
+        return;
+    case ui::ActionKind::SetCategoryTtsName:
+        settings_.categories[index].ttsName = wideUtf8(action.text);
+        break;
     case ui::ActionKind::SetCategoryTimerCount: settings_.categories[index].timerCount = action.intValue; break;
-    case ui::ActionKind::SetTimerMinutes: settings_.categories[index].timers[static_cast<std::size_t>(action.timerIndex)].minutesBefore = action.intValue; break;
-    case ui::ActionKind::SetTimerTtsEnabled: settings_.categories[index].timers[static_cast<std::size_t>(action.timerIndex)].ttsEnabled = action.enabled; break;
-    case ui::ActionKind::SetTimerBeepPattern: settings_.categories[index].timers[static_cast<std::size_t>(action.timerIndex)].beepPattern = static_cast<domain::BeepPattern>(action.beepPattern); break;
-    case ui::ActionKind::SetTimerPitchHz: settings_.categories[index].timers[static_cast<std::size_t>(action.timerIndex)].pitchHz = action.intValue; break;
+    case ui::ActionKind::TestTimer: {
+        if (domain::isPanicStopEnabled() || !settings_.soundEnabled || !validTimerIndex(action.timerIndex)) return;
+        auto& category = settings_.categories[index];
+        auto& timer = category.timers[static_cast<std::size_t>(action.timerIndex)];
+        PlayReminderBeep(timer.beepPattern, timer.pitchHz, settings_.volume);
+        if (timer.ttsEnabled) {
+            const auto name = spokenCategoryName(static_cast<int>(action.category), category.ttsName);
+            const auto text = name + " in " + testTimerRemainingSpeech(timer.minutesBefore);
+            const auto volume = static_cast<int>(settings_.volume * 100.0);
+            std::thread([text, volume] {
+                Sleep(500);
+                if (domain::isPanicStopEnabled()) return;
+                SpeakReminder(text, volume);
+            }).detach();
+        }
+        return;
+    }
+    case ui::ActionKind::TestTimerTone: {
+        if (domain::isPanicStopEnabled() || !settings_.soundEnabled || !validTimerIndex(action.timerIndex)) return;
+        const auto& timer = settings_.categories[index].timers[static_cast<std::size_t>(action.timerIndex)];
+        PlayReminderBeep(timer.beepPattern, timer.pitchHz, settings_.volume);
+        return;
+    }
+    case ui::ActionKind::SetTimerMinutes:
+        if (!validTimerIndex(action.timerIndex)) return;
+        settings_.categories[index].timers[static_cast<std::size_t>(action.timerIndex)].minutesBefore = action.intValue;
+        break;
+    case ui::ActionKind::SetTimerTtsEnabled:
+        if (!validTimerIndex(action.timerIndex)) return;
+        settings_.categories[index].timers[static_cast<std::size_t>(action.timerIndex)].ttsEnabled = action.enabled;
+        break;
+    case ui::ActionKind::SetTimerBeepPattern:
+        if (!validTimerIndex(action.timerIndex)) return;
+        settings_.categories[index].timers[static_cast<std::size_t>(action.timerIndex)].beepPattern = static_cast<domain::BeepPattern>(action.beepPattern);
+        break;
+    case ui::ActionKind::SetTimerPitchHz:
+        if (!validTimerIndex(action.timerIndex)) return;
+        settings_.categories[index].timers[static_cast<std::size_t>(action.timerIndex)].pitchHz = action.intValue;
+        break;
     case ui::ActionKind::ResetPanicStop:
         domain::disablePanicStop(); settings_ = domain::loadSettings(); previousNowMs_.reset(); Refresh(true); return;
     default: return;

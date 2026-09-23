@@ -50,6 +50,10 @@ enum class ActionKind : unsigned char {
     SetCategoryEnabled,
     SetCategoryTimerCount,
     SetCategoryExpanded,
+    OpenHelltidesMap,
+    SetCategoryTtsName,
+    TestTimer,
+    TestTimerTone,
     SetTimerMinutes,
     SetTimerTtsEnabled,
     SetTimerBeepPattern,
@@ -64,6 +68,7 @@ struct UiAction {
     bool enabled{false};
     int intValue{0};
     float value{0.0f};
+    std::wstring text;
     OverlayMode mode{OverlayMode::Overview};
     BeepPattern beepPattern{BeepPattern::Beep};
 };
@@ -80,8 +85,16 @@ struct TimerView {
 struct CategoryView {
     std::wstring title;
     std::wstring subtitle;
+    // Tauri's configured spoken label. This is configuration data, not a
+    // fabricated event subtitle.
+    std::wstring ttsName;
     std::wstring countdown{L"—"};
     std::wstring eventTime;
+    // Expanded-card summary is populated only when the schedule supplied a
+    // verified target. Location stays empty until the schedule has real data.
+    std::wstring summaryLabel;
+    std::wstring summaryTime;
+    std::wstring location;
     // Source ordering uses the visible event target, not the fixed category order.
     std::int64_t targetMs{std::numeric_limits<std::int64_t>::max()};
     bool enabled{true};
