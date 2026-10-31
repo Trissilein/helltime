@@ -349,6 +349,52 @@ struct MainWindowUi::Impl {
              rect, DWRITE_TEXT_ALIGNMENT_CENTER);
     }
 
+    float ExpandedCardHeight(Category category, const CategoryView& categoryView,
+                             float cardWidth) const noexcept {
+        if (!categoryView.enabled || !categoryView.expanded) return 84.0f;
+
+        // The source card body is a wrapping flex form: summary values, the
+        // Helltide map button, the hint, then the timer-count select. Keep
+        // this calculation shared by layout and painting so a narrow window
+        // cannot clip or overlap the expanded shell.
+        constexpr float innerWidthPadding = 28.0f; // card 6px + form 8px on each side
+        constexpr float gap = 6.0f;
+        constexpr float summaryItemWidth = 130.0f;
+        constexpr float mapButtonWidth = 98.0f;
+        constexpr float summaryItemHeight = 44.0f;
+        constexpr float mapButtonHeight = 30.0f;
+        const float available = std::max(1.0f, cardWidth - innerWidthPadding);
+        const bool hasSummary = !categoryView.summaryLabel.empty() && !categoryView.summaryTime.empty();
+        const bool hasLocation = !categoryView.location.empty();
+        const bool hasMap = category == Category::Helltide;
+        int itemCount = (hasSummary ? 1 : 0) + (hasLocation ? 1 : 0) + (hasMap ? 1 : 0);
+        float summaryHeight = 0.0f;
+        if (itemCount > 0) {
+            float rowWidth = 0.0f;
+            int rows = 1;
+            const auto addItem = [&](float itemWidth) {
+                if (rowWidth > 0.0f && rowWidth + gap + itemWidth > available) {
+                    ++rows;
+                    rowWidth = itemWidth;
+                } else {
+                    rowWidth += (rowWidth > 0.0f ? gap : 0.0f) + itemWidth;
+                }
+            };
+            if (hasSummary) addItem(summaryItemWidth);
+            if (hasLocation) addItem(summaryItemWidth);
+            if (hasMap) addItem(mapButtonWidth);
+            summaryHeight = static_cast<float>(rows) * summaryItemHeight;
+            if (!hasSummary && !hasLocation) summaryHeight = mapButtonHeight;
+        }
+
+        const float hintHeight = hasMap ? 17.0f : 0.0f;
+        const float timerCountHeight = 32.0f;
+        const int bodyRows = (summaryHeight > 0.0f ? 1 : 0) + (hintHeight > 0.0f ? 1 : 0) + 1;
+        const float bodyGaps = static_cast<float>(std::max(0, bodyRows - 1)) * 4.0f;
+        const float bodyHeight = 16.0f + summaryHeight + hintHeight + timerCountHeight + bodyGaps;
+        return 60.0f + bodyHeight;
+    }
+
     void DrawCategoryCard(Category category, const CategoryView& categoryView,
                           const D2D1_RECT_F& card, bool compact) {
         (void)compact;
@@ -435,50 +481,78 @@ struct MainWindowUi::Impl {
                HitKind::CategoryEnabled, category);
 
         if (!expanded) return;
-        const float bodyTop = card.top + 62.0f;
-        const float rowHeight = 48.0f;
-        Text(L"Reminder", smallFormat, mutedBrush,
-             D2D1::RectF(card.left + 14.0f, bodyTop, card.right - 14.0f, bodyTop + 16.0f));
 
-        const float countTop = bodyTop + 18.0f;
-        Text(L"Timer", smallFormat, mutedBrush,
-             D2D1::RectF(card.left + 14.0f, countTop, card.left + 55.0f, countTop + 18.0f));
-        for (int i = 0; i < 3; ++i) {
-            const float left = card.left + 58.0f + static_cast<float>(i) * 31.0f;
-            const D2D1_RECT_F button = D2D1::RectF(left, countTop + 1.0f, left + 25.0f, countTop + 19.0f);
-            DrawButton(button, std::to_wstring(i + 1), categoryView.timerCount == i + 1);
-            AddHit(button, HitKind::TimerCount, category, -1, i + 1);
+        const float bodyTop = card.top + headerHeight + 8.0f;
+        const float bodyLeft = card.left + 14.0f;
+        const float bodyRight = card.right - 14.0f;
+        float cursor = bodyTop;
+        const bool hasSummary = !categoryView.summaryLabel.empty() && !categoryView.summaryTime.empty();
+        const bool hasLocation = !categoryView.location.empty();
+        const bool hasMap = category == Category::Helltide;
+        const float available = std::max(1.0f, bodyRight - bodyLeft);
+        const float gap = 6.0f;
+        const float summaryItemWidth = 130.0f;
+        const float mapButtonWidth = 98.0f;
+        const float summaryItemHeight = 44.0f;
+        const float mapButtonHeight = 30.0f;
+        const int itemCount = (hasSummary ? 1 : 0) + (hasLocation ? 1 : 0) + (hasMap ? 1 : 0);
+        if (itemCount > 0) {
+            struct SummaryItem { float width; int kind; };
+            std::array<SummaryItem, 3> items{};
+            int count = 0;
+            if (hasSummary) items[count++] = SummaryItem{summaryItemWidth, 0};
+            if (hasLocation) items[count++] = SummaryItem{summaryItemWidth, 1};
+            if (hasMap) items[count++] = SummaryItem{mapButtonWidth, 2};
+            float x = bodyLeft;
+            float rowTop = cursor;
+            float rowHeight = 0.0f;
+            int rows = 1;
+            for (int itemIndex = 0; itemIndex < count; ++itemIndex) {
+                const auto item = items[itemIndex];
+                if (x > bodyLeft && x + item.width > bodyRight) {
+                    ++rows;
+                    x = bodyLeft;
+                    rowTop += summaryItemHeight;
+                }
+                const auto rect = D2D1::RectF(x, rowTop, x + item.width,
+                                              rowTop + (item.kind == 2 ? mapButtonHeight : summaryItemHeight));
+                if (item.kind == 0) {
+                    DrawModalSection(rect);
+                    Text(categoryView.summaryLabel, smallFormat, mutedBrush,
+                         D2D1::RectF(rect.left + 8.0f, rect.top + 6.0f, rect.right - 8.0f, rect.top + 19.0f));
+                    Text(categoryView.summaryTime, bodyFormat, textBrush,
+                         D2D1::RectF(rect.left + 8.0f, rect.top + 20.0f, rect.right - 8.0f, rect.bottom - 5.0f));
+                } else if (item.kind == 1) {
+                    DrawModalSection(rect);
+                    Text(L"Ort", smallFormat, mutedBrush,
+                         D2D1::RectF(rect.left + 8.0f, rect.top + 6.0f, rect.right - 8.0f, rect.top + 19.0f));
+                    Text(categoryView.location, bodyFormat, textBrush,
+                         D2D1::RectF(rect.left + 8.0f, rect.top + 20.0f, rect.right - 8.0f, rect.bottom - 5.0f));
+                } else {
+                    const auto map = D2D1::RectF(rect.left, rect.top + 7.0f, rect.right, rect.top + 7.0f + mapButtonHeight);
+                    DrawButton(map, L"Map öffnen", true, !state.panicStop);
+                    if (!state.panicStop) AddHit(map, HitKind::OpenHelltidesMap, category);
+                }
+                x += item.width + gap;
+                rowHeight = std::max(rowHeight, item.kind == 2 ? mapButtonHeight : summaryItemHeight);
+            }
+            cursor += static_cast<float>(rows) * summaryItemHeight;
         }
 
-        for (int i = 0; i < std::clamp(categoryView.timerCount, 1, 3); ++i) {
-            const float top = countTop + 25.0f + static_cast<float>(i) * rowHeight;
-            const auto& timer = categoryView.timers[static_cast<std::size_t>(i)];
-            Text(std::wstring(L"T") + std::to_wstring(i + 1), smallFormat, mutedBrush,
-                 D2D1::RectF(card.left + 14.0f, top, card.left + 32.0f, top + 17.0f));
-            const D2D1_RECT_F minutes = SliderRect(card.left + 34.0f, top + 1.0f, std::max(80.0f, card.right - card.left - 132.0f));
-            DrawSlider(minutes, static_cast<float>(std::clamp(timer.minutesBefore, 0, 60)) / 60.0f,
-                       categoryView.enabled);
-            AddHit(minutes, HitKind::TimerMinutes, category, i);
-            Text(std::to_wstring(std::clamp(timer.minutesBefore, 0, 60)) + L" min", smallFormat,
-                 secondaryBrush, D2D1::RectF(minutes.left, top + 11.0f, minutes.right, top + 28.0f),
-                 DWRITE_TEXT_ALIGNMENT_CENTER);
+        if (hasMap) {
+            Text(L"Live-Helltide und Mystery Chest direkt auf helltides.com öffnen.", smallFormat, mutedBrush,
+                 D2D1::RectF(bodyLeft, cursor - 2.0f, bodyRight, cursor + 15.0f));
+            cursor += 17.0f;
+        }
 
-            const D2D1_RECT_F tts = D2D1::RectF(card.right - 82.0f, top, card.right - 54.0f, top + 14.0f);
-            DrawCheckbox(tts.left, tts.top, timer.ttsEnabled, categoryView.enabled);
-            Text(L"TTS", smallFormat, mutedBrush, D2D1::RectF(tts.right + 4.0f, top - 1.0f, card.right - 14.0f, top + 15.0f));
-            AddHit(D2D1::RectF(tts.left - 2.0f, tts.top - 3.0f, card.right - 12.0f, tts.bottom + 4.0f),
-                   HitKind::TimerTts, category, i);
-
-            const D2D1_RECT_F pitch = SliderRect(card.left + 34.0f, top + 28.0f, std::max(80.0f, card.right - card.left - 132.0f));
-            DrawSlider(pitch, static_cast<float>(std::clamp(timer.pitchHz, 200, 2000) - 200) / 1800.0f,
-                       categoryView.enabled);
-            AddHit(pitch, HitKind::TimerPitch, category, i);
-            Text(std::to_wstring(std::clamp(timer.pitchHz, 200, 2000)) + L" Hz", smallFormat,
-                 secondaryBrush, D2D1::RectF(pitch.left, top + 38.0f, pitch.right, top + 54.0f),
-                 DWRITE_TEXT_ALIGNMENT_CENTER);
-            const D2D1_RECT_F beep = D2D1::RectF(card.right - 83.0f, top + 28.0f, card.right - 14.0f, top + 49.0f);
-            DrawButton(beep, timer.beepPattern == BeepPattern::Beep ? L"Beep" : timer.beepPattern == BeepPattern::Double ? L"Double" : L"Triple");
-            AddHit(beep, HitKind::TimerBeep, category, i);
+        const D2D1_RECT_F countLabel = D2D1::RectF(bodyLeft, cursor, bodyLeft + 110.0f, cursor + 28.0f);
+        Text(L"Timer Anzahl", smallFormat, mutedBrush, countLabel);
+        const D2D1_RECT_F countSelect = D2D1::RectF(bodyRight - 56.0f, cursor, bodyRight, cursor + 28.0f);
+        const int timerCount = std::clamp(categoryView.timerCount, 1, 3);
+        DrawButton(countSelect, std::to_wstring(timerCount) + L" ▾", false, !state.panicStop);
+        if (!state.panicStop) {
+            const int nextCount = timerCount == 3 ? 1 : timerCount + 1;
+            AddHit(countSelect, HitKind::TimerCount, category, -1, nextCount);
         }
     }
 

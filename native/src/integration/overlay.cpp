@@ -11,8 +11,10 @@
 #include <cmath>
 #include <cstdio>
 #include <iterator>
+#include <limits>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace helltime::integration {
 namespace {
@@ -44,6 +46,36 @@ std::array<float, 4> colorFromHex(const std::string& hex) {
     }
     const auto fallback = ui::design::Background;
     return {fallback.r, fallback.g, fallback.b, fallback.a};
+}
+
+std::vector<int> visibleOverviewOrder(const ui::UiState& state) {
+    std::vector<int> order;
+    for (int index = 0; index < static_cast<int>(state.categories.size()); ++index) {
+        if (state.overlayCategories[static_cast<std::size_t>(index)] &&
+            state.categories[static_cast<std::size_t>(index)].enabled) {
+            order.push_back(index);
+        }
+    }
+    std::stable_sort(order.begin(), order.end(), [&state](int left, int right) {
+        return state.categories[static_cast<std::size_t>(left)].targetMs <
+               state.categories[static_cast<std::size_t>(right)].targetMs;
+    });
+    return order;
+}
+
+D2D1_COLOR_F overlayCategoryColor(int index) {
+    const auto source = index == 0 ? ui::design::Helltide
+                      : index == 1 ? ui::design::Legion
+                                   : ui::design::WorldBoss;
+    const float sourceWeight = index == 2 ? 0.72f : 0.78f;
+    return D2D1::ColorF(source.r * sourceWeight + (1.0f - sourceWeight),
+                         source.g * sourceWeight + (1.0f - sourceWeight),
+                         source.b * sourceWeight + (1.0f - sourceWeight), 1.0f);
+}
+
+float overviewRowHeight(const ui::CategoryView& category, float scale) {
+    const bool hasSubtitle = !category.subtitle.empty();
+    return scale * (hasSubtitle ? 47.0f : 32.5f);
 }
 
 } // namespace
@@ -264,19 +296,23 @@ void OverlayWindow::Update(const ui::UiState& state, const domain::Settings& set
         return;
     }
 
-    const float scaleX = std::clamp(state.overlayScaleX, 0.25f, 4.0f);
-    const float scaleY = std::clamp(state.overlayScaleY, 0.25f, 4.0f);
-    width_ = std::clamp(static_cast<int>(std::lround(304.0f * scaleX)), 160, 1200);
+    const float scaleX = std::clamp(state.overlayScaleX, 0.6f, 2.0f);
+    const float scaleY = std::clamp(state.overlayScaleY, 0.6f, 2.0f);
+    width_ = std::clamp(static_cast<int>(std::lround(304.0f * scaleX)), 170, 608);
 
-    int visibleRows = 0;
-    for (std::size_t index = 0; index < state.overlayCategories.size(); ++index) {
-        if (state.overlayCategories[index] && state.categories[index].enabled) ++visibleRows;
+    const auto overview = visibleOverviewOrder(state);
+    const float paddingY = 5.0f * scaleY;
+    const float gap = 4.0f * scaleY;
+    float contentHeight = 0.0f;
+    if (toast) {
+        contentHeight = 34.5f * scaleY;
+    } else {
+        for (const auto index : overview) contentHeight += overviewRowHeight(state.categories[static_cast<std::size_t>(index)], scaleY);
+        if (overview.size() > 1) contentHeight += gap * static_cast<float>(overview.size() - 1);
     }
-    const int positioningHeight = positioning_ ? 32 : 0;
-    const int logicalHeight = (toast
-        ? 84
-        : std::max(1, 8 + visibleRows * 38 + std::max(0, visibleRows - 1) * 5)) + positioningHeight;
-    height_ = std::clamp(static_cast<int>(std::lround(logicalHeight * scaleY)), 52, 720);
+    if (positioning_) contentHeight += 30.0f * scaleY + 5.0f * scaleY;
+    const float contentMinimum = 2.0f * paddingY + contentHeight;
+    height_ = std::clamp(static_cast<int>(std::ceil(std::max(132.0f * scaleY, contentMinimum))), 56, 720);
     ClampPosition();
     if (!SetWindowPos(window_, HWND_TOPMOST, position_.x, position_.y, width_, height_, SWP_NOACTIVATE | SWP_NOSENDCHANGING)) {
         RecordError(L"SetWindowPos(update)");
@@ -303,10 +339,14 @@ bool OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
     ID2D1DCRenderTarget* target = nullptr;
     IDWriteTextFormat* title = nullptr;
     IDWriteTextFormat* body = nullptr;
+    IDWriteTextFormat* event = nullptr;
+    IDWriteTextFormat* time = nullptr;
+    IDWriteTextFormat* subline = nullptr;
     ID2D1SolidColorBrush* background = nullptr;
-    ID2D1SolidColorBrush* panel = nullptr;
     ID2D1SolidColorBrush* text = nullptr;
     ID2D1SolidColorBrush* muted = nullptr;
+    ID2D1SolidColorBrush* border = nullptr;
+    ID2D1SolidColorBrush* shadow = nullptr;
     HDC dc = nullptr;
     HBITMAP bitmap = nullptr;
     HBITMAP oldBitmap = nullptr;
@@ -341,6 +381,21 @@ bool OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
         result = write->CreateTextFormat(ui::design::FontUi, nullptr, DWRITE_FONT_WEIGHT_NORMAL,
                                          DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
                                          ui::design::Text12, L"", &body);
+    }
+    if (SUCCEEDED(result)) {
+        result = write->CreateTextFormat(ui::design::FontUi, nullptr, DWRITE_FONT_WEIGHT_BOLD,
+                                         DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+                                         ui::design::Text14, L"", &event);
+    }
+    if (SUCCEEDED(result)) {
+        result = write->CreateTextFormat(ui::design::FontMono, nullptr, DWRITE_FONT_WEIGHT_BLACK,
+                                         DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+                                         ui::design::Text18, L"", &time);
+    }
+    if (SUCCEEDED(result)) {
+        result = write->CreateTextFormat(ui::design::FontUi, nullptr, DWRITE_FONT_WEIGHT_BOLD,
+                                         DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+                                         11.5f, L"", &subline);
     }
     if (FAILED(result)) {
         RecordError(L"text format", result);
@@ -386,20 +441,21 @@ bool OverlayWindow::Render(const ui::UiState& state, const domain::Settings& set
         : D2D1::ColorF(bg[0], bg[1], bg[2], static_cast<float>(settings.overlayBgOpacity));
     result = target->CreateSolidColorBrush(
         backgroundColor, &background);
-    if (SUCCEEDED(result)) {
-        result = target->CreateSolidColorBrush(
-            D2D1::ColorF(0.28f, 0.03f, 0.03f, static_cast<float>(settings.overlayLineBgOpacity)), &panel);
-    }
     if (SUCCEEDED(result)) result = target->CreateSolidColorBrush(ui::design::TextPrimary, &text);
     if (SUCCEEDED(result)) result = target->CreateSolidColorBrush(ui::design::TextMuted, &muted);
+    if (SUCCEEDED(result)) result = target->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1, 0.08f), &border);
+    if (SUCCEEDED(result)) result = target->CreateSolidColorBrush(D2D1::ColorF(0, 0, 0, 0.24f), &shadow);
     if (FAILED(result)) {
         RecordError(L"brush", result);
         break;
     }
 
+    const float scale = std::clamp(state.overlayScaleY, 0.6f, 2.0f);
+    const float hostPadX = 7.0f * scale;
+    const float hostPadY = 5.0f * scale;
+    const float hostRadius = 10.0f * scale;
     target->FillRoundedRectangle(
-        D2D1::RoundedRect(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), ui::design::Radius8, ui::design::Radius8),
-        background);
+        D2D1::RoundedRect(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), hostRadius, hostRadius), background);
     if (positioning) {
         target->DrawRoundedRectangle(
             D2D1::RoundedRect(D2D1::RectF(1, 1, width_ - 1.0f, height_ - 1.0f), ui::design::Radius8, ui::design::Radius8), text, ui::design::Space2);
